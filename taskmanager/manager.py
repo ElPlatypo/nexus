@@ -1,9 +1,8 @@
 #initialize and keep internal list of tasks
 import asyncio
-from util import log, message
+from util import log, types
 from fastapi import FastAPI, encoders
-from typing import Any, Dict, Optional, Union
-from pydantic import BaseModel
+from typing import Any, Dict, List, Optional
 import importlib
 import os
 import inspect
@@ -12,59 +11,14 @@ import json
 logger = log.setup_logger("manager")
 
 class TaskManager:
-    fastapp: FastAPI
-    task_list = []
-
-    def __init__(self):
-        self.fastapp = FastAPI()
-
-class Task(BaseModel):
-    name: str
-    description: str
-    cmd: bool
-    cmd_parameter: Optional[str]
-    cmd_options: Optional[Dict]
-    worker_ : Optional[asyncio.Task]        
-
-    def __init__(self, name: str, description: str) -> None:
-        super().__init__(
-            name = name,
-            description = description,
-            cmd = False
-        )
-        
-        self.cmd_parameter = None
-        self.cmd_options = None
-
-    class Config:
-        arbitrary_types_allowed = True
-
-    async def respond(self, retval: Any):
-        pass
-        # TODO fare fisicamente la POST o whatever per spedirti indietro il risultato
-
-    #actual logic of the task
-    async def worker(self, **kwargs):
-        raise NotImplemented
-    
-    #util function to pass command-like arguments to Task object named attributes
-    def cmd_setup(self) -> None:
-        raise NotImplemented
-
-    def start(self, **kwargs) -> None:
-        # TODO get event loop via fastapi/uvicorn maybe if possible
-        self.worker_ = asyncio.get_event_loop().create_task(self.worker())
-    
-    #outputs a json representation of the object with values
-    def json(self) -> str:
-        return json.dumps(encoders.jsonable_encoder(self))
-    
-    #outputs a json representation of the object with attribute variable types (keeps name and desc untouched)
-    def descriptor(self) -> str:
-        descriptor = self.__annotations__
-        descriptor["name"] = self.name
-        descriptor["description"] = self.description
-        return json.dumps(descriptor)
+    fastapp: FastAPI = FastAPI()
+    task_list: List[type[types.Task]] = []
+   
+def get_task(name: str) -> Optional[type[types.Task]]:
+    for task in manager.task_list:
+        if name == task.name:
+            return type(task)
+    return None
 
 manager = TaskManager()
 
@@ -81,7 +35,7 @@ async def startup_routine():
             module_name = file[:-3]
             module = importlib.import_module(f"taskmanager.tasks.{module_name}")
             for name, obj in inspect.getmembers(module):
-                if inspect.isclass(obj) and issubclass(obj, Task) and obj != Task:
+                if inspect.isclass(obj) and issubclass(obj, types.Task) and obj != types.Task:
                     task_classes.append(obj)
                     logger.info("Registered task: " + name)
 
@@ -105,21 +59,25 @@ async def get_tasks():
         tasks["aviable tasks"].append(json.loads(task.json())) 
     return tasks
 
+@manager.fastapp.post("/api/run_command")
+async def run_task(inbound: types.Command):
+    task_type = get_task(inbound.name)
+    if task_type != None:
+        task = task_type()
+        print(inbound)
+        print(task)
+        task.cmd_setup(inbound.parameter, inbound.options)
+        print(task)
+        task.start()
+
 @manager.fastapp.post("/api/run_task")
 async def run_task(inbound: Dict[Any, Any]):
     print(type(inbound))
     print(inbound)
-    for task in manager.task_list:
-        task: Task
-        if inbound["name"] == task.name:
-            #instantiante new task object
-            task_type = type(task)
-            new_task = task_type()
-            #copy all fields from inbound dict to object
-            for attribute in inbound.keys():
-                if attribute in dir(task):
-                    setattr(new_task, attribute, inbound[attribute])
-            #if task comes from a /command setup call cmd_setup to set the correct fields in the task
-            if new_task.cmd == True:
-                new_task.cmd_setup()
-            new_task.start()
+    task_type = get_task(inbound["name"])
+    new_task = task_type()
+    #copy all fields from inbound dict to object
+    for attribute in inbound.keys():
+        if attribute in dir(new_task):
+            setattr(new_task, attribute, inbound[attribute])
+    new_task.start()

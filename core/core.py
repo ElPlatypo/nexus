@@ -1,8 +1,9 @@
 from dotenv import load_dotenv
 from util import log
-from util import message
-from taskmanager.manager import Task
+from util.types import Message, Command, Task
+from pydantic import BaseModel
 import fastapi 
+from fastapi import encoders
 import json
 from typing import Union, List, Dict, Any
 import requests
@@ -20,6 +21,7 @@ class Core:
     async def get_aviable_tasks(self) -> List[str]:
         response = requests.get("htpps://localhost:" + os.getenv("MANAGER_PORT") + "/tasks")
         print(response.text)
+
 
 logger = log.setup_logger("core")
 
@@ -44,38 +46,30 @@ async def root():
 
 #intermediary between comms input and taskmanager
 @core.fastapp.post("/api/message_from_user")
-async def message_from_user(inbound: Union[message.TextMessageModel, message.CommandMessageModel]):
+async def message_from_user(inbound: Message):
     print(inbound)
-    if inbound.type == message.MessageType.TEXT:
-        logger.info("[User]: " + inbound.text)
 
-    #if message is a command, instantiate the correct Task with values and send it to taskmanager
-    elif inbound.type == message.MessageType.COMMAND:
-        logger.info("[User]: Summoned command: " + inbound.command)
-        for task in core.manager_tasks:
-            if task["name"] == inbound.command:
-                #copy task object and set values of copy
-                new_task = task
-                new_task["cmd"] = True
-                new_task["cmd_parameter"] = inbound.parameter
-                new_task["cmd_options"] = inbound.options
-                response = requests.post("http://localhost:" + os.getenv("MANAGER_PORT") + "/api/run_task", data = json.dumps(new_task))
-                print(json.dumps(new_task))
-        
+    #handle text input
+    if inbound.contents.text != None:
+        logger.info("[User]: " + inbound.contents.text)
+
+    #if message is a command, send it to taskmanager
+    elif inbound.contents.command != None:
+        logger.info("[User]: Summoned command: " + inbound.contents.command.name)
+        encoded_command = encoders.jsonable_encoder(inbound.contents.command)
+        response = requests.post("http://localhost:" + os.getenv("MANAGER_PORT") + "/api/run_command", data = json.dumps(encoded_command)) 
+
     return {"message": "ok"}
 
 #intermediary between task output and comms out
-@core.fastapp.post("/api/message_to_user")
-async def message_to_user(inbound: message.TextMessageModel):
-
+@core.fastapp.post("/api/task_final_output")
+async def message_to_user(inbound: Message):
     #check message type
-    if inbound.type == message.MessageType.TEXT:
-        logger.info("[Nexus]: " + inbound.text)
+    if inbound.contents.text != None:
+        logger.info("[Nexus]: " + inbound.contents.text)
         #pass payload to comms service
-        response = requests.post("http://localhost:" + os.getenv("COMMS_PORT"), data = inbound)
-
-    else:
-        logger.error("Core coudnt handle message type while trying to reply to user")
+        encoded_message = encoders.jsonable_encoder(inbound)
+        response = requests.post("http://localhost:" + os.getenv("COMMS_PORT") + "/api/message_to_user", data = json.dumps(encoded_message))
 
     return {"message": "ok"}
 

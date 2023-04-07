@@ -2,8 +2,9 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, encoders
 from typing import Dict, List, Tuple
 from util import setup_logger
-from util.message import *
+from util.types import Message, Command, MessageChannel, MessageContents
 import os
+import re
 import requests
 import pyrogram
 import json
@@ -16,6 +17,7 @@ logger = setup_logger("comms")
 class Comms():
     fastapp: FastAPI
     teleapp: pyrogram.Client
+    tele_clients: List[str] = []
 
     def __init__(self) -> None:
         self.fastapp = FastAPI()
@@ -26,29 +28,19 @@ class Comms():
             bot_token = os.environ.get("TELEGRAM_API_TOKEN"),
         )
 
-def parse_command(input: str) -> Dict:
-
-    if input.split(" ").__len__() == 1:
-        return {"command": input[1:], "parameter": None, "options": None}
-    
-    elif input.split(" ").__len__() > 1:
-        #select first word, and remove the "/"
-        command = input.split(" ")[0][1:]
-        #select up to first option, remove command and return the rest
-        if input.split("-")[0].split(" ").__len__() > 1:
-            parameter = input.split("-")[0].split(" ")[1]
-        else:
-            parameter = None
-        #remove command, parameters and join back options
-        options_str = "-".join(input.split("-")[1:])
-        options = {}
-        for option in options_str.split("-"):
-            if option.split(" ").__len__() > 1:
-                options[option.split(" ")[0]] = option.split(" ")[1]
-        return {"command": command, "parameter": parameter, "options": options}
-
-    else:
-        logger.error("error parsing command")
+def parse_command(input: str) -> Command:
+    match1 = re.match("^/(\S+)\s?(\w\S+)?", input)
+    command = match1.group(1)
+    parameter = match1.group(2)
+    match2 = re.findall("-(\S+){1}\s(\S+){1}", input)
+    options = {}
+    for match in match2:
+        options[match[0]] = match[1]
+    if options == {}:
+        options = None
+    cmd = Command(name = command, parameter = parameter, options = options)
+    print(cmd)
+    return cmd
 
 comms = Comms()
 
@@ -68,20 +60,26 @@ async def shutdown_routine():
 async def root():
     return {"message": "Nexus is up and running"}
 
+@comms.fastapp.post("/api/message_to_user")
+async def message_to_user(message: Message):
+    await comms.teleapp.send_message(comms.tele_clients[0], message.contents.text)
+    return {"message": "ok"}
+
 #pyrogram
 
 @comms.teleapp.on_message(pyrogram.filters.text)
 async def tele_message(client, message:pyrogram.types.Message):
-
+    #save conversation id
+    if message.chat.id not in comms.tele_clients:
+        comms.tele_clients.append(message.chat.id)
+    #parse text
     if message.text.startswith("/"):
         parsed_command = parse_command(message.text)
-        print(parsed_command)
-        inbound = CommandMessageModel(
-            channel = Channel.TELEGRAM,
-            type = MessageType.COMMAND,
-            command = parsed_command["command"],
-            parameter = parsed_command["parameter"],
-            options = parsed_command["options"]
+        inbound = Message(
+            channel = MessageChannel.TELEGRAM,
+            contents = MessageContents(
+                command = parsed_command
+            )
         )
 
         try:
@@ -92,11 +90,11 @@ async def tele_message(client, message:pyrogram.types.Message):
             logger.warning("Error with request to core")
         
     else:
-
-        inbound = TextMessageModel(
-            channel = Channel.TELEGRAM,
-            type = MessageType.TEXT,
-            text = message.text
+        inbound = Message(
+            channel = MessageChannel.TELEGRAM,
+            type = MessageContents(
+                text = message.text
+            )      
         )
 
         try:

@@ -1,12 +1,11 @@
 import asyncio
-
-from ..manager import Task
-from util import message
-from typing import Tuple, Dict
+from util.types import Task
+from typing import Tuple, Dict, Any
 from dotenv import load_dotenv
 import requests
 import os
 from typing import Optional
+
 
 WEATHER_FROM_COORD_URL: str = "https://api.openweathermap.org/data/2.5/weather?lat={}&lon={}&appid={}"
 load_dotenv()
@@ -14,18 +13,10 @@ load_dotenv()
 async def parse_location(loc: str) -> Tuple[float, float]:
     return (420, 69)
 
-async def get_weather(lon, lat) -> str:
-    print("suus")
+async def get_weather(lat, lon) -> str:
     api_key = os.getenv("OPENWEATHER_API_KEY")
-    print("saaas")
-    print(api_key)
-    wtr_response = requests.get(WEATHER_FROM_COORD_URL.format(
-        lat, 
-        lon, 
-        api_key
-    )).json()
-    print(wtr_response)
-    print("sefe")
+    url = WEATHER_FROM_COORD_URL.format(lat, lon, api_key)
+    wtr_response = requests.get(url).json()
     reply = (
         "Current weather in " + 
         str(wtr_response["name"]) + ":\n" + 
@@ -35,32 +26,24 @@ async def get_weather(lon, lat) -> str:
         "Humidity:\n" +
         str(wtr_response["main"]["humidity"]) + "%"
     )
-    print("rgtght")
     return reply
 
 class Weather(Task):
-
-    location: Optional[str]
-    latitude: Optional[float]
-    longitude: Optional[float]
-
-    def __init__(self, location: str = None, longitude: float = None, latitude: float = None, **kwargs):
-        super().__init__(
-            name = "weather",
-            description = "get weather info from specific coordinates or city names",
-        )
-        self.location = location
-        self.longitude = longitude
-        self.latitude = latitude
+    #parent class fields
+    name = "weather"
+    description = "get weather info from specific coordinates or city names"
+    #own fields
+    location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    
 
         
-    def cmd_setup(self) -> None:
-        if self.cmd_parameter is not None:
-            self.location = self.cmd_parameter
-        if "latitude" in self.cmd_options.keys():
-            self.latitude = self.cmd_options["latitude"]
-        if "longitude" in self.cmd_options.keys():
-            self.longitude = self.cmd_options["longitude"]
+    def cmd_setup(self, parameter: Optional[str] = None, options: Optional[Dict[str, Any]] = None) -> None:
+        self.location = parameter
+        if options != None:
+            self.latitude = options["latitude"]
+            self.longitude = options["longitude"]
 
     async def worker(self):
         if self.location is not None:
@@ -71,6 +54,7 @@ class Weather(Task):
         #else:
             #await self.respond("you dind't give me any arguments!")
         print(forecast)
+        self.respond_final(text = forecast)
 
 #class WeatherFromCoord(Task):
 #    latitude: float
