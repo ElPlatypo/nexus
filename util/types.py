@@ -1,8 +1,9 @@
 from enum import Enum
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, List, Optional, Union
 from pydantic import BaseModel
 import fastapi.encoders
 import os
+import uuid
 import requests
 import json
 import asyncio
@@ -14,6 +15,23 @@ import asyncio
 class MessageChannel(Enum):
     API = 0
     TELEGRAM = 1
+
+class Identifiers(BaseModel):
+    internal: Optional[str]
+    telegram: Optional[str]
+    discord: Optional[str]
+
+    def check(self, id: str) -> bool:
+        value = False
+        if id == self.internal or id == self.telegram or id == self.discord:
+            value = True
+        return value
+
+class User(BaseModel):
+    name: str
+    ids: Identifiers
+
+NEXUSUSER = User(name = "Nexus", identifiers = Identifiers(internal = 0))
 
 class Command(BaseModel):
     name: str
@@ -29,19 +47,29 @@ class Video(BaseModel):
 class Audio(BaseModel):
     bytes: Any
 
-class MessageContents(BaseModel):
+class Message(BaseModel):
+    user: User
+    chat: Optional[str]
+    channel: Optional[MessageChannel]
     text: Optional[str]
     command: Optional[Command]
     image: Optional[Image]
     video: Optional[Video]
     audio: Optional[Audio]
 
-class Message(BaseModel):
-    channel: Optional[MessageChannel]
-    contents: MessageContents
-
     def json(self) -> str:
         return json.dumps(fastapi.encoders.jsonable_encoder(self))
+    
+class Exchange(BaseModel):
+    channel: MessageChannel
+    messages: List[Message] = []
+
+class Conversation(BaseModel):
+    ids: Identifiers
+    users: List[User]
+    history: List[Exchange] = []
+    active_exchanges: List[Exchange] = []
+
     
 #main task class
 
@@ -55,13 +83,12 @@ class Task(BaseModel):
 
     def respond_final(self, text: str = None, command: Command = None, image: Image = None, video: Video = None, audio: Audio = None) -> None:
         message = Message(
-            contents = MessageContents(
-                text = text,
-                command = command,
-                image = image,
-                video = video,
-                audio = audio
-            )
+            user = NEXUSUSER,
+            text = text,
+            command = command,
+            image = image,
+            video = video,
+            audio = audio
         )
         encoded_message = fastapi.encoders.jsonable_encoder(message)
         response = requests.post("http://localhost:6040" + "/api/task_final_output", data = json.dumps(encoded_message))
@@ -88,3 +115,6 @@ class Task(BaseModel):
         descriptor["name"] = self.name
         descriptor["description"] = self.description
         return json.dumps(descriptor)
+    
+
+

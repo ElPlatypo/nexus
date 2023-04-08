@@ -50,11 +50,10 @@ class Weather(Task):
             self.latitude, self.longitude = await parse_location(self.location)
         if self.latitude is not None and self.longitude is not None:
             forecast = await get_weather(self.latitude, self.longitude)
-            #await self.respond(forecast)
-        #else:
-            #await self.respond("you dind't give me any arguments!")
-        print(forecast)
-        self.respond_final(text = forecast)
+            self.respond_final(text = forecast)
+        else:
+            await self.respond_final(text = "you dind't give me any arguments!")
+        
 
 #class WeatherFromCoord(Task):
 #    latitude: float

@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, encoders
 from typing import Dict, List, Tuple
 from util import setup_logger
-from util.types import Message, Command, MessageChannel, MessageContents
+from util.types import Message, Command, MessageChannel, User, Identifiers
 import os
 import re
 import requests
@@ -62,7 +62,7 @@ async def root():
 
 @comms.fastapp.post("/api/message_to_user")
 async def message_to_user(message: Message):
-    await comms.teleapp.send_message(comms.tele_clients[0], message.contents.text)
+    await comms.teleapp.send_message(comms.tele_clients[0], message.text)
     return {"message": "ok"}
 
 #pyrogram
@@ -70,36 +70,49 @@ async def message_to_user(message: Message):
 @comms.teleapp.on_message(pyrogram.filters.text)
 async def tele_message(client, message:pyrogram.types.Message):
     #save conversation id
+    print(message.chat.type)
+    print(message.from_user.username)
     if message.chat.id not in comms.tele_clients:
         comms.tele_clients.append(message.chat.id)
-    #parse text
+    #handle text and command messages
     if message.text.startswith("/"):
         parsed_command = parse_command(message.text)
         inbound = Message(
+            user = User(
+                name = message.from_user.username,
+                ids = Identifiers(
+                    telegram = message.from_user.id
+                )
+            ),
+            chat = message.chat.id,
             channel = MessageChannel.TELEGRAM,
-            contents = MessageContents(
-                command = parsed_command
-            )
+            command = parsed_command,
+            text = message.text
         )
 
         try:
             response = requests.post("http://localhost:" + os.getenv("CORE_PORT") + "/api/message_from_user", data = inbound.json())
-            logger.info(response.text)
+            print(response)
 
         except ConnectionRefusedError:
             logger.warning("Error with request to core")
         
     else:
         inbound = Message(
+            user = User(
+                name = message.from_user.username,
+                ids = Identifiers(
+                    telegram = message.from_user.id
+                )
+            ),
+            chat = message.chat.id,
             channel = MessageChannel.TELEGRAM,
-            type = MessageContents(
-                text = message.text
-            )      
+            text = message.text 
         )
 
         try:
             response = requests.post("http://localhost:" + os.getenv("CORE_PORT") + "/api/message_from_user", data = inbound.json())
-            logger.info(response)
+            print(response)
 
         except:
             logger.warning("Error with request to core")
