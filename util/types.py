@@ -81,10 +81,6 @@ class Conversation(BaseModel):
 
     
 #main task class
-
-class TaskState(BaseModel):
-    
-
 class Task(BaseModel):
     id: str
     name: str = "parent Task class"

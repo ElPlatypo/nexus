@@ -45,14 +45,16 @@ class Weather(Task):
             self.latitude = options["latitude"]
             self.longitude = options["longitude"]
 
-    async def worker(self):
-        if self.location is not None:
-            self.latitude, self.longitude = await parse_location(self.location)
-        if self.latitude is not None and self.longitude is not None:
-            forecast = await get_weather(self.latitude, self.longitude)
-            await self.respond(text = forecast, final = True)
-        else:
-            await self.respond(text = "you dind't give me any arguments!", final = True)
+    async def worker(self, state: Tuple[str, Dict[str, str]]):
+        if state[0] == "begin":
+            if self.location is not None:
+                self.latitude, self.longitude = await parse_location(self.location)
+            if self.latitude is not None and self.longitude is not None:
+                forecast = await get_weather(self.latitude, self.longitude)
+                await self.respond(text = forecast, final = True)
+            else:
+                new_state = ("awaiting city name")
+                await self.respond(text = "please specify the city")
         
 
 #class WeatherFromCoord(Task):

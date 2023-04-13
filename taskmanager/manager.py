@@ -91,6 +91,18 @@ async def run_task(inbound: Dict[Any, Any], exc_id: Optional[str] = None):
     new_task.start()
     return {"message": "ok"}
 
+#continue the exchange
+@manager.fastapp.post("/api/continue_exchange")
+async def continue_exchange(inbound: types.Message, exc_id: str):
+    logger.info("continue exchange with task: "+ Fore.WHITE + exc_id)
+    task_type = manager.get_task(inbound.name)
+    if task_type != None:
+        task = task_type(id = exc_id)
+        task.cmd_setup(inbound.parameter, inbound.options)
+        manager.active_tasks.append(exc_id)
+        task.start()
+    return {"message": "ok"}
+
 #task completion callback
 @manager.fastapp.get("/api/task_complete")
 async def task_complete(task_id: str):
