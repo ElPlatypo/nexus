@@ -3,117 +3,143 @@ from util import log
 from util.types import Message, Command, Task, Conversation, Exchange, MessageChannel, Identifiers
 import fastapi 
 from fastapi import encoders
+import uuid
+from colorama import Fore
+import httpx
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import requests
 import os
 
 load_dotenv()
+logger = log.setup_logger("core")
 
 class Core:
     fastapp: fastapi.FastAPI
+    httpx_client: httpx.AsyncClient
     manager_tasks: List[Task]
     conversations: List[Conversation] = []
+    
 
     def __init__(self):
         self.fastapp = fastapi.FastAPI()
-
-    async def get_aviable_tasks(self) -> List[str]:
-        response = requests.get("htpps://localhost:" + os.getenv("MANAGER_PORT") + "/tasks")
-        print(response.text)
-
-
-logger = log.setup_logger("core")
+        self.httpx_client = httpx.AsyncClient()
 
 core = Core()
 
-def handle_tele_conv(inbound: Message) -> None:
-    check = False
+#add relevant info to message from task manager and start a new exchange if necessary
+def handle_manager_message(inbound: Message, exchange: str) -> Message:
+    conv_id = None
+    channel = None
     for conv in core.conversations:
-        if conv.ids.check(inbound.chat):
+        for exc in conv.active_exchanges:
+            if exc.id == exchange:
+                conv_id = conv.id
+                channel = exc.channel
+    inbound.chat = conv_id
+    inbound.channel = channel
+    return inbound
+
+#stores in memory the flow of the conversations
+def handle_conv(inbound: Message, final: bool = False) -> str:
+    exc_id = str(uuid.uuid4())
+    for conv in core.conversations:
+        if conv.id == inbound.chat:
             #check if there is an active exchange
             for exc in conv.active_exchanges:
+                #since every conversation can have one active exchange per channel we can check that
                 if inbound.channel == exc.channel:
                     exc.messages.append(inbound)
-                    check = True
+                    logger.debug("added message to exchange with id: " + Fore.WHITE + exc_id + Fore.CYAN + ", from conversation with id: " + Fore.WHITE + conv.id)
+                    if final == True:
+                        conv.active_exchanges.remove(exc)
+                        conv.history.append(exc)
+                    return exc.id
     
-            if check == False:
-                conv.active_exchanges.append(
-                    Exchange(
-                        channel = inbound.channel,
-                        messages = [inbound]
-                    )
-                )
-                check = True
-    #if no conversation id found crate a new one
-    if check == False:
-        new_conv = Conversation(
-            ids = Identifiers(),
-            users = [inbound.user],
-            active_exchanges = [
+            conv.active_exchanges.append(
                 Exchange(
+                    id = exc_id,
                     channel = inbound.channel,
                     messages = [inbound]
-                ) 
-            ],
+                )
             )
-        if inbound.channel == MessageChannel.TELEGRAM:
-            new_conv.ids.telegram = inbound.chat
-        else:
-            print("no valid id")
-            raise Exception()
-        core.conversations.append(new_conv)
+            logger.debug("added message to new exchange with id: " + Fore.WHITE + exc_id + Fore.CYAN + ", from conversation with id: " + Fore.WHITE + conv.id)
+            if final == True:
+                conv.active_exchanges.remove(exc)
+                conv.history.append(exc)
+            return exc_id
+            
+    #if no conversation id found crate a new one
+    new_conv = Conversation(
+        id = inbound.chat,
+        users = [inbound.user],
+        active_exchanges = [
+            Exchange(
+                id = exc_id,
+                channel = inbound.channel,
+                messages = [inbound]
+            ) 
+        ],
+    )
+    core.conversations.append(new_conv)
+    logger.debug("added message to new exchange with id: " + Fore.WHITE + exc_id + Fore.CYAN + ", from new conversation with id: " + Fore.WHITE + inbound.chat)
+    if final == True:
+        conv.active_exchanges.remove(exc)
+        conv.history.append(exc)
+    return exc_id
 
 #FastAPI 
 
 @core.fastapp.on_event("startup")
 async def startup_routine():
-    response = requests.get("http://localhost:" + os.getenv("MANAGER_PORT") + "/tasks")
+    response = await core.httpx_client.get("http://localhost:" + os.getenv("MANAGER_PORT") + "/tasks")
     tasks = json.loads(response.text)
     core.manager_tasks = tasks["aviable tasks"]
-    logger.info("core startup completed")
+    logger.info("Core service loading complete")
 
 @core.fastapp.on_event("shutdown")
 async def shutdown_routine():
-    logger.info("core shutdown completed")
+    await core.httpx_client.aclose()
+    logger.info("Core shutdown completed")
 
 @core.fastapp.get("/status")
 async def root():
     return {"message": "Nexus core up and running"}
 
+@core.fastapp.get("/conversations")
+async def get_conv():
+    return encoders.jsonable_encoder(core.conversations)
+
 #intermediary between comms input and taskmanager
 @core.fastapp.post("/api/message_from_user")
 async def message_from_user(inbound: Message):
-    print(inbound)        
-
-    handle_tele_conv(inbound)
+    logger.info("incoming message from chat: " + Fore.WHITE + inbound.chat)   
+    exchange_id = handle_conv(inbound)
     #handle text input
     if inbound.text != None:
-        logger.info("[User]: " + inbound.text)
+        logger.info(Fore.GREEN + "[{}]: ".format(inbound.user.name) + Fore.WHITE + inbound.text)
 
     #if message is a command, send it to taskmanager
     if inbound.command != None:
         encoded_command = encoders.jsonable_encoder(inbound.command)
-        response = requests.post("http://localhost:" + os.getenv("MANAGER_PORT") + "/api/run_command", data = json.dumps(encoded_command)) 
-
-    print(core.conversations)
+        response = await core.httpx_client.post("http://localhost:" + os.getenv("MANAGER_PORT") + "/api/run_command?exc_id={}".format(exchange_id), data = json.dumps(encoded_command)) 
     return {"message": "ok"}
 
 @core.fastapp.post("/api/message_from_group")
 async def message_from_user(inbound: Message, chat_id: str):
     return {"message": "ok"}
 
-#intermediary between task output and comms out
-@core.fastapp.post("/api/task_final_output")
-async def message_to_user(inbound: Message):
-    handle_tele_conv(inbound)
+@core.fastapp.post("/api/task_response")
+async def message_to_user(inbound: Message, task_id: str, final: bool):
+    message: Message = handle_manager_message(inbound, task_id)
+    handle_conv(message, final)
+    response = await core.httpx_client.get("http://localhost:" + os.getenv("MANAGER_PORT") + "/api/task_complete?task_id={}".format(task_id))
     #check message type
-    if inbound.text != None:
-        logger.info("[Nexus]: " + inbound.text)
+    if message.text != None:
+        logger.info(Fore.GREEN + "[{}]: ".format(inbound.user.name) + Fore.WHITE + message.text)
         #pass payload to comms service
-        encoded_message = encoders.jsonable_encoder(inbound)
-        response = requests.post("http://localhost:" + os.getenv("COMMS_PORT") + "/api/message_to_user", data = json.dumps(encoded_message))
-
+        encoded_message = encoders.jsonable_encoder(message)
+        response = await core.httpx_client.post("http://localhost:" + os.getenv("COMMS_PORT") + "/api/message_to_user", data = json.dumps(encoded_message))
     return {"message": "ok"}
 
 #Pyrogram
