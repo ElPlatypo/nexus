@@ -8,20 +8,20 @@ Nexus is a collection of distributed microservices communicating through an inte
 
 ## Modules
 1. comms
-The `comms` module manages the receipt and sending of messages via the relevant communication channels.
+- The `comms` module manages the receipt and sending of messages via the relevant communication channels.
 2. core
-The `core` module serves as the high-level logic of the system, interpreting user requests, making task decisions, and performing other functions.
+- The `core` module serves as the high-level logic of the system, interpreting user requests, making task decisions, and performing other functions.
 3. taskmanager
-The `taskmanager` module is responsible for receiving tasks from the core, initiating, monitoring their progress, and providing the necessary data back to the user.
+- The `taskmanager` module is responsible for receiving tasks from the core, initiating, monitoring their progress, and providing the necessary data back to the user.
 4. transcriber
-The `transcriber` module utilizes AI to perform audio-to-text transcription.
+- The `transcriber` module utilizes AI to perform audio-to-text transcription.
 5. synthesizer
-The `synthesizer` module converts text into speech to deliver audio responses to users.
+- The `synthesizer` module converts text into speech to deliver audio responses to users.
 
 ## Getting Started
 
-1. Clone the repository: git clone [repository_url]
-2. Install the required dependencies: pip install -r requirements.txt
+1. Clone the repository: `git clone https://github.com/ElPlatypo/nexus`
+2. Install the required dependencies: `pip install -r requirements.txt`
 3. Configure environment variables:
 `TELEGRAM_API_ID`: Your Telegram API ID
 `TELEGRAM_API_HASH`: Your Telegram API hash
