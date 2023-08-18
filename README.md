@@ -40,7 +40,8 @@ Once Nexus is up and running, you can interact with it through the supported com
 
 1. Sending Messages
 To send a message to Nexus, you can use the provided API endpoints. For example, you can use the `/api/message_to_user` endpoint to send a message from a user to Nexus.
-```POST /api/message_to_user
+````
+POST /api/message_to_user
 Content-Type: application/json
 
 {
@@ -51,11 +52,13 @@ Content-Type: application/json
   "chat": "chat_id",
   "channel": "telegram",
   "text": "Hello, Nexus!"
-}```
+}
+````
 
 2. Running Tasks
 Nexus supports various tasks that can be executed through the `/api/run_task` endpoint. You can provide the necessary parameters and options to specify the task you want to perform.
-```POST /api/run_task
+````
+POST /api/run_task
 Content-Type: application/json
 
 {
@@ -64,4 +67,5 @@ Content-Type: application/json
   "options": {
     "option_name": "option_value"
   }
-}```
+}
+````
