@@ -1,3 +1,3 @@
 # nexus
 
-board: https://board.fantabos.co/
+Basic infrastructure for a privacy-first, open source, ai powered personal assistant.
