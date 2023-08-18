@@ -38,7 +38,7 @@ Run `taskmanager.py` to start the task manager module.
 
 Once Nexus is up and running, you can interact with it through the supported communication channels (e.g., Telegram) to initiate various tasks and receive responses.
 
-1. Sending Messages
+## Sending Messages
 To send a message to Nexus, you can use the provided API endpoints. For example, you can use the `/api/message_to_user` endpoint to send a message from a user to Nexus.
 ````
 POST /api/message_to_user
@@ -55,7 +55,7 @@ Content-Type: application/json
 }
 ````
 
-2. Running Tasks
+## Running Tasks
 Nexus supports various tasks that can be executed through the `/api/run_task` endpoint. You can provide the necessary parameters and options to specify the task you want to perform.
 ````
 POST /api/run_task
