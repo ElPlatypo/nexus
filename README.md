@@ -23,16 +23,16 @@ Nexus is a collection of distributed microservices communicating through an inte
 1. Clone the repository: `git clone https://github.com/ElPlatypo/nexus`
 2. Install the required dependencies: `pip install -r requirements.txt`
 3. Configure environment variables:
-`TELEGRAM_API_ID`: Your Telegram API ID
-`TELEGRAM_API_HASH`: Your Telegram API hash
-`TELEGRAM_API_TOKEN`: Your Telegram bot token
-`CORE_PORT`: Port for the core module
-`MANAGER_PORT`: Port for the task manager module
-`COMMS_PORT`: Port for the communication module
+- `TELEGRAM_API_ID`: Your Telegram API ID
+- `TELEGRAM_API_HASH`: Your Telegram API hash
+- `TELEGRAM_API_TOKEN`: Your Telegram bot token
+- `CORE_PORT`: Port for the core module
+- `MANAGER_PORT`: Port for the task manager module
+- `COMMS_PORT`: Port for the communication module
 4. Start the individual modules:
-Run `comms.py` to start the communication module.
-Run `core.py` to start the core module.
-Run `taskmanager.py` to start the task manager module.
+- Run `comms.py` to start the communication module.
+- Run `core.py` to start the core module.
+- Run `taskmanager.py` to start the task manager module.
 
 ## Usage
 
