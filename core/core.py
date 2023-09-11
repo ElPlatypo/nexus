@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
-from util import log
-from util.types import Message, Command, Task, Conversation, Exchange, MessageChannel, Identifiers
+from nexutil.log import setup_logger
+from nexutil.types import Message, Command, Task, Conversation, Exchange, MessageChannel, Identifiers
 import fastapi 
 from fastapi import encoders
 import uuid
@@ -12,7 +12,7 @@ import requests
 import os
 
 load_dotenv()
-logger = log.setup_logger("core")
+logger = setup_logger("core")
 
 class Core:
     fastapp: fastapi.FastAPI

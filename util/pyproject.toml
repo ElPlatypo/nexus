@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["nexutil"]
+package-dir = {"" = "src"}
+
+[project]
+name = "nexutil"
+version = "0.0.1"
+authors = [
+    { name = "elplatypo" },
+]
+description = "Utility library for nexus services"
+requires-python = ">=3.7"
+classifiers = [
+    "programming language :: python :: 3",
+    "operating system :: os independent",
+]
+
+
+dependencies = [
+    
+]

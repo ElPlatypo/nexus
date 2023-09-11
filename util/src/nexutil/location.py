@@ -1,4 +1,4 @@
-import modules.logging as log
+import log
 import os
 import requests
 from fastapi import APIRouter

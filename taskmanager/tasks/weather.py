@@ -1,5 +1,5 @@
 import asyncio
-from util.types import Task
+from nexutil.types import Task
 from typing import Tuple, Dict, Any
 from dotenv import load_dotenv
 import requests
@@ -30,8 +30,9 @@ async def get_weather(lat, lon) -> str:
 
 class Weather(Task):
     #parent class fields
-    name = "weather"
-    description = "get weather info from specific coordinates or city names"
+    name: str = "weather"
+    description: str = "get weather info from specific coordinates or city names"
+    worker_: Optional[asyncio.Task] = None
     #own fields
     location: Optional[str] = None
     latitude: Optional[float] = None

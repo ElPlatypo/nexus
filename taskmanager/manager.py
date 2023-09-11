@@ -1,6 +1,6 @@
 #initialize and keep internal list of tasks
 import asyncio
-from util import log, types
+from nexutil import log, types
 from fastapi import FastAPI, encoders
 from typing import Any, Dict, List, Optional
 import importlib
@@ -44,7 +44,7 @@ async def startup_routine():
                     logger.debug("registered task: " + name)
 
     #instantiate each class to get defult attributes
-    manager.task_list = [task_class(id = -1) for task_class in task_classes]
+    manager.task_list = [task_class(id = "0") for task_class in task_classes]
     logger.info("Task manager service finished loading")
 
 @manager.fastapp.on_event("shutdown")

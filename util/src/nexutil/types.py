@@ -37,7 +37,7 @@ class User(BaseModel):
     name: str
     id: str
 
-NEXUSUSER = User(name = "Nexus", id = 0)
+NEXUSUSER = User(name = "Nexus", id = "0")
 
 class Command(BaseModel):
     name: str
@@ -82,7 +82,7 @@ class Conversation(BaseModel):
     
 #main task class
 class Task(BaseModel):
-    id: str
+    id: str = "default_id"
     name: str = "parent Task class"
     description: str = "if you see this there's probably something wrong"
     

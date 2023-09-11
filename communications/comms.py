@@ -1,8 +1,8 @@
 from dotenv import load_dotenv
 from fastapi import FastAPI, encoders
 from typing import Dict, List, Tuple
-from util.log import setup_logger
-from util.types import Message, Command, MessageChannel, User, Identifiers
+from nexutil.log import setup_logger
+from nexutil.types import Message, Command, MessageChannel, User, Identifiers
 from colorama import Fore
 import uuid
 import httpx
