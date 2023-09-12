@@ -34,10 +34,11 @@ async def startup_routine():
     #import all task classes defined inside folder tasks
     task_classes = []
     dir = os.path.join(os.path.dirname(__file__), "tasks")
+    print(os.listdir(dir))
     for file in os.listdir(dir):
         if file.endswith(".py"):
             module_name = file[:-3]
-            module = importlib.import_module(f"taskmanager.tasks.{module_name}")
+            module = importlib.import_module(f"tasks.{module_name}")
             for name, obj in inspect.getmembers(module):
                 if inspect.isclass(obj) and issubclass(obj, types.Task) and obj != types.Task:
                     task_classes.append(obj)

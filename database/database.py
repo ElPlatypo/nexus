@@ -61,7 +61,7 @@ async def root():
 @database.fastapp.get("/api/get_user_from_tg/{tg_id}")
 async def get_user(tg_id):
     cursor = database.connection.cursor()
-    cursor.execute("SELECT * FROM users WHERE telegram_id={};".format(tg_id))
+    cursor.execute(f"SELECT * FROM users WHERE telegram_id=\"{tg_id}\";")
 
     result = cursor.fetchone()
 

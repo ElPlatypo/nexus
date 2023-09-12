@@ -87,7 +87,7 @@ async def message_to_user(message: Message):
 @comms.teleapp.on_message(pyrogram.filters.text)
 async def tele_message(client, message:pyrogram.types.Message):
     #get internal user id, user and create new entry if necessary
-    logger.info("incoming message from telegram user: {}".format(message.from_user.username))
+    logger.info("incoming message from telegram user: {}, id: {}".format(message.from_user.username, message.chat.id))
     source_id = None
     try:
         response = await comms.httpx_client.get("http://localhost:" + str(config.database_port) + "/api/get_user_from_tg/{}".format(message.chat.id))
@@ -95,11 +95,12 @@ async def tele_message(client, message:pyrogram.types.Message):
             new_id = str(uuid.uuid4())
             new_identifier = Identifiers(
                 internal = new_id,
-                telegram = str(message.chat.id)
+                telegram = str(message.chat.id),
+                discord = None
             )
             source_id = new_id
             try:
-                response = await comms.httpx_client.post("http://localhost:" + str(config.database_port) + "/api/add_user", data = new_identifier)
+                response = await comms.httpx_client.post("http://localhost:" + str(config.database_port) + "/api/add_user", data = new_identifier.model_dump_json())
             except httpx.ConnectError:
                 logger.warning("Error creating new user in db")
         else:
@@ -121,7 +122,10 @@ async def tele_message(client, message:pyrogram.types.Message):
             chat = source_id,
             channel = MessageChannel.TELEGRAM,
             command = parsed_command,
-            text = message.text
+            text = message.text,
+            image = None,
+            video = None,
+            audio = None
         )
 
         try:
@@ -140,7 +144,11 @@ async def tele_message(client, message:pyrogram.types.Message):
             ),
             chat = source_id,
             channel = MessageChannel.TELEGRAM,
-            text = message.text 
+            text = message.text,
+            command = None,
+            image = None,
+            video = None,
+            audio = None
         )
 
         try:

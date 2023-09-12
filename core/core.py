@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 from nexutil.log import setup_logger
 from nexutil.types import Message, Command, Task, Conversation, Exchange, MessageChannel, Identifiers
+from nexutil.config import Config
 import fastapi 
 from fastapi import encoders
 import uuid
@@ -13,6 +14,7 @@ import os
 
 load_dotenv()
 logger = setup_logger("core")
+config = Config()
 
 class Core:
     fastapp: fastapi.FastAPI
@@ -92,9 +94,12 @@ def handle_conv(inbound: Message, final: bool = False) -> str:
 
 @core.fastapp.on_event("startup")
 async def startup_routine():
-    response = await core.httpx_client.get("http://localhost:" + os.getenv("MANAGER_PORT") + "/tasks")
-    tasks = json.loads(response.text)
-    core.manager_tasks = tasks["aviable tasks"]
+    try:
+        response = await core.httpx_client.get("http://localhost:" + str(config.taskmanager_port) + "/tasks")
+        tasks = json.loads(response.text)
+        core.manager_tasks = tasks["aviable tasks"]
+    except httpx.ConnectError:
+        logger.error("Error fetching tasks from manager")
     logger.info("Core service loading complete")
 
 @core.fastapp.on_event("shutdown")
@@ -122,7 +127,7 @@ async def message_from_user(inbound: Message):
     #if message is a command, send it to taskmanager
     if inbound.command != None:
         encoded_command = encoders.jsonable_encoder(inbound.command)
-        response = await core.httpx_client.post("http://localhost:" + os.getenv("MANAGER_PORT") + "/api/run_command?exc_id={}".format(exchange_id), data = json.dumps(encoded_command)) 
+        response = await core.httpx_client.post("http://localhost:" + str(config.taskmanager_port) + "/api/run_command?exc_id={}".format(exchange_id), data = json.dumps(encoded_command)) 
     return {"message": "ok"}
 
 @core.fastapp.post("/api/message_from_group")
@@ -133,13 +138,13 @@ async def message_from_user(inbound: Message, chat_id: str):
 async def message_to_user(inbound: Message, task_id: str, final: bool):
     message: Message = handle_manager_message(inbound, task_id)
     handle_conv(message, final)
-    response = await core.httpx_client.get("http://localhost:" + os.getenv("MANAGER_PORT") + "/api/task_complete?task_id={}".format(task_id))
+    response = await core.httpx_client.get("http://localhost:" + str(config.taskmanager_port) + "/api/task_complete?task_id={}".format(task_id))
     #check message type
     if message.text != None:
         logger.info(Fore.GREEN + "[{}]: ".format(inbound.user.name) + Fore.WHITE + message.text)
         #pass payload to comms service
         encoded_message = encoders.jsonable_encoder(message)
-        response = await core.httpx_client.post("http://localhost:" + os.getenv("COMMS_PORT") + "/api/message_to_user", data = json.dumps(encoded_message))
+        response = await core.httpx_client.post("http://localhost:" + str(config.comms_port) + "/api/message_to_user", data = json.dumps(encoded_message))
     return {"message": "ok"}
 
 #Pyrogram
