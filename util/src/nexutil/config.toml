@@ -1,0 +1,11 @@
+[communications]
+    port = 4201
+
+[core]
+    port = 4200
+
+[taskmanager]
+    port = 4202
+
+[database] 
+    port = 4203

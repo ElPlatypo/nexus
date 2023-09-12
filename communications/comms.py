@@ -1,21 +1,21 @@
 from dotenv import load_dotenv
-from fastapi import FastAPI, encoders
-from typing import Dict, List, Tuple
+from fastapi import FastAPI
+from typing import Dict, List
 from nexutil.log import setup_logger
 from nexutil.types import Message, Command, MessageChannel, User, Identifiers
+from nexutil.config import Config
 from colorama import Fore
 import uuid
+import json
 import httpx
 import os
 import re
-import requests
 import pyrogram
-import json
-
 
 
 load_dotenv() 
 logger = setup_logger("comms")
+config = Config()
 
 class Comms():
     fastapp: FastAPI
@@ -86,23 +86,28 @@ async def message_to_user(message: Message):
 
 @comms.teleapp.on_message(pyrogram.filters.text)
 async def tele_message(client, message:pyrogram.types.Message):
-    #check source id, user and create new entry if necessary
+    #get internal user id, user and create new entry if necessary
     logger.info("incoming message from telegram user: {}".format(message.from_user.username))
-    if not any([source_id.telegram == str(message.chat.id) for source_id in comms.sources_id]):
-        new_id = str(uuid.uuid4())
-        new_identifier = Identifiers(
-            internal = new_id,
-            telegram = str(message.chat.id)
-        )
-        comms.sources_id.append(new_identifier)
-        logger.debug("added new chat: telegram id " + Fore.WHITE + str(message.chat.id) + Fore.CYAN + ", internal id " + Fore.WHITE + new_id)
-    
-
-    #get internal user and chat id
     source_id = None
-    for source in comms.sources_id:
-        if source.telegram == str(message.chat.id):
-            source_id = source.internal
+    try:
+        response = await comms.httpx_client.get("http://localhost:" + str(config.database_port) + "/api/get_user_from_tg/{}".format(message.chat.id))
+        if json.load(response)["internal_id"] == "missing":
+            new_id = str(uuid.uuid4())
+            new_identifier = Identifiers(
+                internal = new_id,
+                telegram = str(message.chat.id)
+            )
+            source_id = new_id
+            try:
+                response = await comms.httpx_client.post("http://localhost:" + str(config.database_port) + "/api/add_user", data = new_identifier)
+            except httpx.ConnectError:
+                logger.warning("Error creating new user in db")
+        else:
+            source_id = json.load(response)["internal_id"]
+
+    except httpx.ConnectError:
+        logger.warning("Error fetching user info from db")
+        return
 
     #handle text and command messages    
     if message.text.startswith("/"):
@@ -120,7 +125,7 @@ async def tele_message(client, message:pyrogram.types.Message):
         )
 
         try:
-            response = await comms.httpx_client.post("http://localhost:" + os.getenv("CORE_PORT") + "/api/message_from_user", data = inbound.json())
+            response = await comms.httpx_client.post("http://localhost:" + str(config.core_port) + "/api/message_from_user", data = inbound.json())
             print(response)
 
         except ConnectionRefusedError:
@@ -139,7 +144,7 @@ async def tele_message(client, message:pyrogram.types.Message):
         )
 
         try:
-            response = await comms.httpx_client.post("http://localhost:" + os.getenv("CORE_PORT") + "/api/message_from_user", data = inbound.json())
+            response = await comms.httpx_client.post("http://localhost:" + str(config.core_port) + "/api/message_from_user", data = inbound.json())
             print(response)
 
         except:
