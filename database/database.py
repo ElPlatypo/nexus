@@ -35,10 +35,23 @@ def startup() -> None:
 
     cursor.execute("""
                     CREATE TABLE IF NOT EXISTS users (
-                        internal_id TEXT,
+                        id TEXT,
                         telegram_id TEXT,
-                        discord_id TEXT
-                    );
+                        discord_id TEXT);
+                    CREATE TABLE IF NOT EXISTS messages (
+                        id TEXT,
+                        exchange_id TEXT,
+                        conversation_id TEXT,
+                        from_user TEXT,
+                        text TEXT,
+                        command TEXT,
+                        image TEXT,
+                        audio TEXT,
+                        video TEXT);
+                    CREATE TABLE IF NOT EXISTS exchanges (
+                        id TEXT,
+                        concluded TEXT,
+                        channel TEXT);
                 """)
 
 
