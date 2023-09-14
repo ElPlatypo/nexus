@@ -12,7 +12,7 @@ taskmng = session.new_window(window_name= "taskmng")
 database = session.new_window(window_name= "Database")
 
 #startup nexus services
-database.attached_pane.send_keys("python3 database/__main__.py")
+database.attached_pane.send_keys("pgadmin4")
 comms.attached_pane.send_keys("python3 communications/__main__.py")
 taskmng.attached_pane.send_keys("python3 taskmanager/__main__.py")
 core.attached_pane.send_keys("python3 core/__main__.py")

@@ -6,6 +6,3 @@
 
 [taskmanager]
     port = 4202
-
-[database] 
-    port = 4203

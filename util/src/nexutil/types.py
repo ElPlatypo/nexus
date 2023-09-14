@@ -4,7 +4,7 @@ from pydantic import BaseModel
 import fastapi.encoders
 import httpx
 import uuid
-import requests
+import datetime
 import json
 import asyncio
 
@@ -18,8 +18,9 @@ class MessageChannel(Enum):
 
 class Identifiers(BaseModel):
     internal: Optional[str]
-    telegram: Optional[str]
+    telegram: Optional[int]
     discord: Optional[str]
+    username: Optional[str]
 
     def check(self, id: str) -> bool:
         value = False
@@ -52,12 +53,19 @@ class Video(BaseModel):
 
 class Audio(BaseModel):
     bytes: Any
+    
+class Exchange(BaseModel):
+    id: str
+    channel: MessageChannel
+    concluded: bool = False
 
 class Message(BaseModel):
     id: str
-    user: User
-    chat: Optional[str]
-    channel: Optional[MessageChannel]
+    exchange: Exchange
+    conversation_id: str
+    from_user: Identifiers
+    datetime: datetime.datetime
+    channel: MessageChannel
     text: Optional[str]
     command: Optional[Command]
     image: Optional[Image]
@@ -66,19 +74,6 @@ class Message(BaseModel):
 
     def json(self) -> str:
         return json.dumps(fastapi.encoders.jsonable_encoder(self))
-    
-class Exchange(BaseModel):
-    id: str
-    channel: MessageChannel
-    messages: List[Message] = []
-    concluded: bool = False
-
-class Conversation(BaseModel):
-    id: str
-    users: List[User]
-    history: List[Exchange] = []
-    active_exchanges: List[Exchange] = []
-
     
 #main task class
 class Task(BaseModel):

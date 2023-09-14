@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 from nexutil.log import setup_logger
-from nexutil.types import Message, Command, Task, Conversation, Exchange, MessageChannel, Identifiers
+from nexutil.types import Message, Command, Task, Exchange, MessageChannel, Identifiers
 from nexutil.config import Config
 import fastapi 
 from fastapi import encoders
@@ -20,9 +20,7 @@ class Core:
     fastapp: fastapi.FastAPI
     httpx_client: httpx.AsyncClient
     manager_tasks: List[Task]
-    conversations: List[Conversation] = []
     
-
     def __init__(self):
         self.fastapp = fastapi.FastAPI()
         self.httpx_client = httpx.AsyncClient()
@@ -111,23 +109,18 @@ async def shutdown_routine():
 async def root():
     return {"message": "Nexus core up and running"}
 
-@core.fastapp.get("/conversations")
-async def get_conv():
-    return encoders.jsonable_encoder(core.conversations)
-
 #intermediary between comms input and taskmanager
 @core.fastapp.post("/api/message_from_user")
 async def message_from_user(inbound: Message):
-    logger.info("incoming message from chat: " + Fore.WHITE + inbound.chat)   
-    exchange_id = handle_conv(inbound)
+    logger.info("incoming message from user: " + Fore.WHITE + inbound.from_user.username)   
     #handle text input
     if inbound.text != None:
-        logger.info(Fore.GREEN + "[{}]: ".format(inbound.user.name) + Fore.WHITE + inbound.text)
+        logger.info(Fore.GREEN + "[{}]: ".format(inbound.from_user.username) + Fore.WHITE + inbound.text)
 
     #if message is a command, send it to taskmanager
     if inbound.command != None:
         encoded_command = encoders.jsonable_encoder(inbound.command)
-        response = await core.httpx_client.post("http://localhost:" + str(config.taskmanager_port) + "/api/run_command?exc_id={}".format(exchange_id), data = json.dumps(encoded_command)) 
+        response = await core.httpx_client.post("http://localhost:" + str(config.taskmanager_port) + "/api/run_command?exc_id={}".format(inbound.exchange.id), data = json.dumps(encoded_command)) 
     return {"message": "ok"}
 
 @core.fastapp.post("/api/message_from_group")

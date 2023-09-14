@@ -2,8 +2,9 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from typing import Dict, List
 from nexutil.log import setup_logger
-from nexutil.types import Message, Command, MessageChannel, User, Identifiers
+from nexutil.types import Message, Command, MessageChannel, User, Identifiers, Exchange
 from nexutil.config import Config
+import nexutil.database as db
 from colorama import Fore
 import uuid
 import json
@@ -21,6 +22,7 @@ class Comms():
     fastapp: FastAPI
     teleapp: pyrogram.Client
     httpx_client: httpx.AsyncClient
+    dbconnection = db.psycopg.Connection
     sources_id: List[Identifiers] = []
     users_id: List[Identifiers] = []
     id_table: Dict[str, List[Identifiers]] = {"users": [], "sources": []}
@@ -35,6 +37,7 @@ class Comms():
             bot_token = os.environ.get("TELEGRAM_API_TOKEN"),
         )
         self.httpx_client = httpx.AsyncClient()
+        self.dbconnection = db.connect()
 
 def parse_command(input: str) -> Command:
     match1 = re.match("^/(\S+)\s?(\w\S+)?", input)
@@ -57,7 +60,7 @@ comms = Comms()
 @comms.fastapp.on_event("startup")
 async def startup_routine():
     await comms.teleapp.start()
-
+    db.gen_comms_tables(comms.dbconnection)
     logger.info("Comms service finished loading")
 
 @comms.fastapp.on_event("shutdown")
@@ -86,76 +89,56 @@ async def message_to_user(message: Message):
 
 @comms.teleapp.on_message(pyrogram.filters.text)
 async def tele_message(client, message:pyrogram.types.Message):
-    #get internal user id, user and create new entry if necessary
-    logger.info("incoming message from telegram user: {}, id: {}".format(message.from_user.username, message.chat.id))
-    source_id = None
-    try:
-        response = await comms.httpx_client.get("http://localhost:" + str(config.database_port) + "/api/get_user_from_tg/{}".format(message.chat.id))
-        if json.load(response)["internal_id"] == "missing":
-            new_id = str(uuid.uuid4())
-            new_identifier = Identifiers(
-                internal = new_id,
-                telegram = str(message.chat.id),
-                discord = None
-            )
-            source_id = new_id
-            try:
-                response = await comms.httpx_client.post("http://localhost:" + str(config.database_port) + "/api/add_user", data = new_identifier.model_dump_json())
-            except httpx.ConnectError:
-                logger.warning("Error creating new user in db")
-        else:
-            source_id = json.load(response)["internal_id"]
-
-    except httpx.ConnectError:
-        logger.warning("Error fetching user info from db")
-        return
-
-    #handle text and command messages    
-    if message.text.startswith("/"):
-        parsed_command = parse_command(message.text)
-        inbound = Message(
-            id = str(uuid.uuid4()),
-            user = User(
-                name = message.from_user.username,
-                id = "NOT IMPLEMENTED"
-            ),
-            chat = source_id,
-            channel = MessageChannel.TELEGRAM,
-            command = parsed_command,
-            text = message.text,
-            image = None,
-            video = None,
-            audio = None
-        )
-
-        try:
-            response = await comms.httpx_client.post("http://localhost:" + str(config.core_port) + "/api/message_from_user", data = inbound.json())
-            print(response)
-
-        except ConnectionRefusedError:
-            logger.warning("Error with request to core")
-        
-    else:
-        inbound = Message(
-            id = str(uuid.uuid4()),
-            user = User(
-                name = message.from_user.username,
-                id = "NOT IMPLEMENTED"
-            ),
-            chat = source_id,
-            channel = MessageChannel.TELEGRAM,
-            text = message.text,
-            command = None,
-            image = None,
-            video = None,
-            audio = None
-        )
-
-        try:
-            response = await comms.httpx_client.post("http://localhost:" + str(config.core_port) + "/api/message_from_user", data = inbound.json())
-            print(response)
-
-        except:
-            logger.warning("Error with request to core")
 
     
+    logger.info("incoming message from telegram user: {}, id: {}".format(message.from_user.username, message.chat.id))
+    #get internal user id, user and create new entry if necessary
+    user = db.get_user(comms.dbconnection, message.chat.id)
+    if user == None:
+        new_identifier = Identifiers(
+            internal = str(uuid.uuid4()),
+            telegram = message.from_user.id,
+            discord = None,
+            username = message.from_user.username
+        )
+        
+        db.add_user(comms.dbconnection, new_identifier)
+
+    #get exchange id
+    exchange = db.get_exchange(comms.dbconnection, user)
+    if exchange == None:
+        exchange = Exchange(
+            id = str(uuid.uuid4()),
+            channel = MessageChannel.TELEGRAM,
+            concluded = False
+        )
+        db.add_exchange(comms.dbconnection, exchange)
+
+    inbound = Message(
+        id = str(uuid.uuid4()),
+        exchange = exchange,
+        conversation_id = str(message.chat.id),
+        from_user = user,
+        datetime = message.date,
+        channel = MessageChannel.TELEGRAM,
+        command = None,
+        text = None,
+        image = None,
+        video = None,
+        audio = None
+    )
+
+    
+    #handle text and command messages    
+    if message.text.startswith("/"):
+        inbound.command = parse_command(message.text)
+        inbound.text = message.text  
+    else:
+        inbound.text = message.text
+
+    db.add_message(comms.dbconnection, inbound)
+
+    try:
+        response = await comms.httpx_client.post("http://localhost:" + str(config.core_port) + "/api/message_from_user", data = inbound.json())
+    except ConnectionRefusedError:
+        logger.warning("Error with request to core")

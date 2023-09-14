@@ -13,5 +13,4 @@ class Config():
             config = tomli.load(file)
             self.core_port = config["core"]["port"]
             self.comms_port = config["communications"]["port"]
-            self.database_port = config["database"]["port"]
             self.taskmanager_port = config["taskmanager"]["port"]
