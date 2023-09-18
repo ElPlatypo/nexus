@@ -1,7 +1,9 @@
 from dotenv import load_dotenv
 from nexutil.log import setup_logger
-from nexutil.types import Message, Command, Task, Exchange, MessageChannel, Identifiers
+from nexutil.types import Message, Command, Task, Exchange, MessageChannel, Identifiers, NEXUSUSER
 from nexutil.config import Config
+import nexutil.inference as inf
+import nexutil.database as db
 import fastapi 
 from fastapi import encoders
 import uuid
@@ -20,10 +22,12 @@ class Core:
     fastapp: fastapi.FastAPI
     httpx_client: httpx.AsyncClient
     manager_tasks: List[Task]
+    dbconnection: db.psycopg.Connection
     
     def __init__(self):
         self.fastapp = fastapi.FastAPI()
         self.httpx_client = httpx.AsyncClient()
+        self.dbconnection = db.connect()
 
 core = Core()
 
@@ -113,7 +117,7 @@ async def root():
 @core.fastapp.post("/api/message_from_user")
 async def message_from_user(inbound: Message):
     logger.info("incoming message from user: " + Fore.WHITE + inbound.from_user.username)   
-    #handle text input
+
     if inbound.text != None:
         logger.info(Fore.GREEN + "[{}]: ".format(inbound.from_user.username) + Fore.WHITE + inbound.text)
 
@@ -121,6 +125,29 @@ async def message_from_user(inbound: Message):
     if inbound.command != None:
         encoded_command = encoders.jsonable_encoder(inbound.command)
         response = await core.httpx_client.post("http://localhost:" + str(config.taskmanager_port) + "/api/run_command?exc_id={}".format(inbound.exchange.id), data = json.dumps(encoded_command)) 
+    
+    #handle text messages
+    if inbound.command == None and inbound.text != None:
+        logger.info("Generating text response...")
+        gen_text = json.loads(await inf.generate_text(core.httpx_client, inbound.text))
+        reply = Message(
+            id = str(uuid.uuid4()),
+            exchange = inbound.exchange,
+            conversation_id = inbound.conversation_id,
+            from_user = NEXUSUSER,
+            datetime = inbound.datetime.now(),
+            channel = inbound.channel,
+            command = None,
+            text = gen_text["str"],
+            image = None,
+            video = None,
+            audio = None
+        )
+        logger.info(Fore.GREEN + "[NEXUS]: " + Fore.WHITE + gen_text["str"])
+        db.add_message(core.dbconnection, reply)
+        await core.httpx_client.post("http://localhost:" + str(config.comms_port) + "/api/message_to_user/{}".format(inbound.from_user.internal), data = reply.json())
+        db.end_exchange(core.dbconnection, inbound.exchange.id)
+
     return {"message": "ok"}
 
 @core.fastapp.post("/api/message_from_group")

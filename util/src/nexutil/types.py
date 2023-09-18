@@ -34,11 +34,10 @@ class Identifiers(BaseModel):
         else:
             return None
 
-class User(BaseModel):
-    name: str
-    id: str
+NEXUSUSER = Identifiers(internal="00000000-0000-0000-0000-000000000000", telegram = None, discord = None, username = "Nexus")
 
-NEXUSUSER = User(name = "Nexus", id = "0")
+class String(BaseModel):
+    str: str
 
 class Command(BaseModel):
     name: str

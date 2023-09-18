@@ -6,3 +6,12 @@
 
 [taskmanager]
     port = 4202
+
+[postgresql]
+    host = "localhost"
+    database_name = "nexus"
+    username = "nexus"
+    password = "nexus"
+
+[inference]
+    port = 4203

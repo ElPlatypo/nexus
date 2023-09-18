@@ -2,12 +2,13 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from typing import Dict, List
 from nexutil.log import setup_logger
-from nexutil.types import Message, Command, MessageChannel, User, Identifiers, Exchange
+from nexutil.types import Message, Command, MessageChannel, Identifiers, Exchange, Audio
 from nexutil.config import Config
+import nexutil.inference as inf
 import nexutil.database as db
 from colorama import Fore
 import uuid
-import json
+import io
 import httpx
 import os
 import re
@@ -73,39 +74,36 @@ async def shutdown_routine():
 async def root():
     return {"message": "Nexus is up and running"}
 
-@comms.fastapp.post("/api/message_to_user")
-async def message_to_user(message: Message):
-    logger.debug("incoming message for chat: {}".format(message.chat))
-    if message.channel == MessageChannel.TELEGRAM:
-        for source in comms.sources_id:
-            print("awef", source.internal, message.chat)
-            if source.internal == message.chat:
-                print("awef")
-                tele_chat = source.telegram
-    await comms.teleapp.send_message(tele_chat, message.text)
+@comms.fastapp.post("/api/message_to_user/{recipient}")
+async def message_to_user(message: Message, recipient: str):
+    logger.debug("incoming message for chat: {}".format(message.conversation_id))
+    exchange = db.get_exchange(comms.dbconnection, recipient)
+    if exchange.channel == MessageChannel.TELEGRAM:
+        chat_id = db.get_user_internal(comms.dbconnection, recipient)
+        await comms.teleapp.send_message(chat_id.telegram, message.text)
     return {"message": "ok"}
 
 #pyrogram
 
-@comms.teleapp.on_message(pyrogram.filters.text)
+@comms.teleapp.on_message()
 async def tele_message(client, message:pyrogram.types.Message):
 
     
     logger.info("incoming message from telegram user: {}, id: {}".format(message.from_user.username, message.chat.id))
     #get internal user id, user and create new entry if necessary
-    user = db.get_user(comms.dbconnection, message.chat.id)
+    user = db.get_user_tg(comms.dbconnection, message.chat.id)
     if user == None:
-        new_identifier = Identifiers(
+        user = Identifiers(
             internal = str(uuid.uuid4()),
             telegram = message.from_user.id,
             discord = None,
             username = message.from_user.username
         )
         
-        db.add_user(comms.dbconnection, new_identifier)
+        db.add_user(comms.dbconnection, user)
 
     #get exchange id
-    exchange = db.get_exchange(comms.dbconnection, user)
+    exchange = db.get_exchange(comms.dbconnection, user.internal)
     if exchange == None:
         exchange = Exchange(
             id = str(uuid.uuid4()),
@@ -130,15 +128,25 @@ async def tele_message(client, message:pyrogram.types.Message):
 
     
     #handle text and command messages    
-    if message.text.startswith("/"):
+    if message.text != None and message.text.startswith("/"):
         inbound.command = parse_command(message.text)
         inbound.text = message.text  
-    else:
+    elif message.text != None:
         inbound.text = message.text
+
+    #handle voice messages
+    if message.voice != None:
+        print("a")
+        voice = await message.download(in_memory=True)
+        print("b")
+        tscript = await inf.transcribe_audio(comms.httpx_client, voice)
+        print(tscript)
+        inbound.text = tscript
+        
 
     db.add_message(comms.dbconnection, inbound)
 
     try:
-        response = await comms.httpx_client.post("http://localhost:" + str(config.core_port) + "/api/message_from_user", data = inbound.json())
+        response = await comms.httpx_client.post("http://localhost:" + str(config.core_port) + "/api/message_from_user", data = inbound.json(), timeout = 30)
     except ConnectionRefusedError:
         logger.warning("Error with request to core")

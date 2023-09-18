@@ -3,11 +3,13 @@ from typing import Optional
 import traceback
 from . import types
 from . import log
+from . import config
 
 logger = log.setup_logger("Nexutil")
+conf = config.Config()
 
 def connect() -> psycopg.Connection:
-    con = psycopg.connect(host = "localhost", dbname = "nexus", user = "nexus", password = "m4rt1n4")
+    con = psycopg.connect(host = conf.database_host, dbname = conf.database_name, user = conf.database_username, password = conf.database_password)
     return con
 
 def gen_comms_tables(con: psycopg.Connection) -> bool:
@@ -40,6 +42,15 @@ def gen_comms_tables(con: psycopg.Connection) -> bool:
                     FOREIGN KEY (exchange_id) REFERENCES exchanges (id),
                     FOREIGN KEY (from_user) REFERENCES users(internal_id));
                     """)
+        
+        cur.execute("""INSERT INTO users (
+                    internal_id,
+                    telegram_id,
+                    discord_id,
+                    username) 
+                    VALUES ('00000000-0000-0000-0000-000000000000',null,null,'Nexus')
+                    ON CONFLICT DO NOTHING;""")
+        
         con.commit()
         return True
     except:
@@ -47,14 +58,38 @@ def gen_comms_tables(con: psycopg.Connection) -> bool:
         traceback.print_exc()
         return False
     
-def get_user(con: psycopg.Connection, user_id: str) -> Optional[types.Identifiers]:
+def get_user_tg(con: psycopg.Connection, user_id: str) -> Optional[types.Identifiers]:
     try:
         cur = con.cursor()
         
         cur.execute("""SELECT * FROM users 
-                    WHERE telegram_id=%s 
-                    OR discord_id='%s';""", 
-                    (int(user_id), user_id))
+                    WHERE telegram_id=%s;""", 
+                    (int(user_id),))
+
+        result = cur.fetchone()
+
+        if result == None:
+            return None
+        else:
+            user = types.Identifiers(
+                internal = str(result[0]),
+                telegram = result[1],
+                discord = result[2],
+                username = result[3]
+            )
+            return user
+    except:
+        logger.warning("Error fetching user from db")
+        traceback.print_exc()
+        return None
+    
+def get_user_internal(con: psycopg.Connection, user_id: str) -> Optional[types.Identifiers]:
+    try:
+        cur = con.cursor()
+        
+        cur.execute("""SELECT * FROM users 
+                    WHERE internal_id=%s;""", 
+                    (user_id,))
 
         result = cur.fetchone()
 
@@ -82,7 +117,7 @@ def add_user(con: psycopg.Connection, user: types.Identifiers) -> bool:
                     telegram_id,
                     discord_id,
                     username) 
-                    VALUES ('%s',%s,'%s','%s');""",
+                    VALUES (%s,%s,%s,%s);""",
                     (user.internal, user.telegram, user.discord, user.username))
         con.commit()
         return True
@@ -91,7 +126,7 @@ def add_user(con: psycopg.Connection, user: types.Identifiers) -> bool:
         traceback.print_exc()
         return False
     
-def get_exchange(con: psycopg.Connection, user: types.Identifiers) -> Optional[types.Exchange]:
+def get_exchange(con: psycopg.Connection, user_internal_id: str) -> Optional[types.Exchange]:
     try:
         cur = con.cursor()
 
@@ -99,7 +134,7 @@ def get_exchange(con: psycopg.Connection, user: types.Identifiers) -> Optional[t
                     INNER JOIN exchanges ON messages.exchange_id = exchanges.id
                     WHERE exchanges.concluded = FALSE
                     AND messages.from_user = %s;""",
-                    (user.internal,))
+                    (user_internal_id,))
         
         result = cur.fetchone()
 
@@ -157,5 +192,21 @@ def add_message(con: psycopg.Connection, message: types.Message) -> bool:
         return True
     except:
         logger.warning("Error fetching message from db")
+        traceback.print_exc()
+        return False
+    
+def end_exchange(con: psycopg.Connection, exchange: str) -> bool:
+    try:
+        cur = con.cursor()
+
+        cur.execute("""UPDATE exchanges
+                    SET concluded = TRUE
+                    WHERE id = %s;""",
+                    (exchange,))
+
+        con.commit()
+        return True
+    except:
+        logger.warning("Error ending exchange in db")
         traceback.print_exc()
         return False
