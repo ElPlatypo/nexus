@@ -44,54 +44,6 @@ def handle_manager_message(inbound: Message, exchange: str) -> Message:
     inbound.channel = channel
     return inbound
 
-#stores in memory the flow of the conversations
-def handle_conv(inbound: Message, final: bool = False) -> str:
-    exc_id = str(uuid.uuid4())
-    for conv in core.conversations:
-        if conv.id == inbound.chat:
-            #check if there is an active exchange
-            for exc in conv.active_exchanges:
-                #since every conversation can have one active exchange per channel we can check that
-                if inbound.channel == exc.channel:
-                    exc.messages.append(inbound)
-                    logger.debug("added message to exchange with id: " + Fore.WHITE + exc_id + Fore.CYAN + ", from conversation with id: " + Fore.WHITE + conv.id)
-                    if final == True:
-                        conv.active_exchanges.remove(exc)
-                        conv.history.append(exc)
-                    return exc.id
-    
-            conv.active_exchanges.append(
-                Exchange(
-                    id = exc_id,
-                    channel = inbound.channel,
-                    messages = [inbound]
-                )
-            )
-            logger.debug("added message to new exchange with id: " + Fore.WHITE + exc_id + Fore.CYAN + ", from conversation with id: " + Fore.WHITE + conv.id)
-            if final == True:
-                conv.active_exchanges.remove(exc)
-                conv.history.append(exc)
-            return exc_id
-            
-    #if no conversation id found crate a new one
-    new_conv = Conversation(
-        id = inbound.chat,
-        users = [inbound.user],
-        active_exchanges = [
-            Exchange(
-                id = exc_id,
-                channel = inbound.channel,
-                messages = [inbound]
-            ) 
-        ],
-    )
-    core.conversations.append(new_conv)
-    logger.debug("added message to new exchange with id: " + Fore.WHITE + exc_id + Fore.CYAN + ", from new conversation with id: " + Fore.WHITE + inbound.chat)
-    if final == True:
-        conv.active_exchanges.remove(exc)
-        conv.history.append(exc)
-    return exc_id
-
 #FastAPI 
 
 @core.fastapp.on_event("startup")

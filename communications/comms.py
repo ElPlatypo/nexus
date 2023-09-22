@@ -136,11 +136,8 @@ async def tele_message(client, message:pyrogram.types.Message):
 
     #handle voice messages
     if message.voice != None:
-        print("a")
         voice = await message.download(in_memory=True)
-        print("b")
         tscript = await inf.transcribe_audio(comms.httpx_client, voice)
-        print(tscript)
         inbound.text = tscript
         
 

@@ -5,18 +5,22 @@ from fastapi import FastAPI, encoders
 from typing import Any, Dict, List, Optional
 import importlib
 from colorama import Fore
-import uuid
+from nexutil.config import Config
 import os
 import inspect
 import json
 
 logger = log.setup_logger("manager")
+config = Config()
 
 class TaskManager:
-    fastapp: FastAPI = FastAPI()
+    fastapp: FastAPI 
     task_list: List[type[types.Task]] = []
     active_tasks: List[str] = []
-   
+    
+    def __init__(self):
+        self.fastapp = FastAPI()
+
     def get_task(self, name: str) -> Optional[type[types.Task]]:
         for task in self.task_list:
             if name == task.name:
@@ -30,7 +34,6 @@ manager = TaskManager()
 
 @manager.fastapp.on_event("startup")
 async def startup_routine():
-
     #import all task classes defined inside folder tasks
     task_classes = []
     dir = os.path.join(os.path.dirname(__file__), "tasks")
