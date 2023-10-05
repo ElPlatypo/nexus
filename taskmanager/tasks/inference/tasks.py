@@ -1,19 +1,24 @@
 from celery import shared_task
-import httpx
 from nexutil import types
 from nexutil import config
 from nexutil import log
 import traceback
 
-logger = log.setup_logger("inference task")
+class Gentext(types.Task):
+    name: str = "generate-text"
+    description: str = "takes an input string ans uses it as prompt with a LLM"
+
+    def worker(self, prompt):
+        generate_text.delay(prompt)
 
 @shared_task
 async def generate_text(prompt: str) -> str:
+    logger = log.setup_logger("generate-text task")
     conf = config.Config()
     try:
         string = types.String(str = prompt)
-        response = await httpx.post("http://localhost:" + str(conf.inference_port) + "/api/generate_text", data = string.model_dump_json(), timeout = 30)
-        return response.text
+        #response = await httpx.post("http://localhost:" + str(conf.inference_port) + "/api/generate_text", data = string.model_dump_json(), timeout = 30)
+        return "response.text"
     except:
         logger.warning("Error generating text with inference service")
         traceback.print_exc()

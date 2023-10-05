@@ -1,12 +1,11 @@
 from enum import Enum
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Optional, Callable
 from pydantic import BaseModel
 import fastapi.encoders
-import httpx
-import uuid
 import datetime
 import json
-import asyncio
+from celery import shared_task
+from pyrogram import enums
 
 #pydantic class definitions
 
@@ -75,53 +74,25 @@ class Message(BaseModel):
         return json.dumps(fastapi.encoders.jsonable_encoder(self))
     
 #main task class
-class Task(BaseModel):
-    id: str = "default_id"
+class Task():
+
     name: str = "parent Task class"
     description: str = "if you see this there's probably something wrong"
+    worker_args: Dict[str, str] = {}
     
-    worker_ : Optional[asyncio.Task]
+    @shared_task
+    def worker(**kwargs):
+        raise NotImplementedError
 
-    class Config:
-        arbitrary_types_allowed = True
-
-    #generate a response message without source ids, should be filled by core later
-    async def respond(self, final: bool, text: str = None, command: Command = None, image: Image = None, video: Video = None, audio: Audio = None) -> None:
-        client = httpx.AsyncClient()
-        message = Message(
-            id = str(uuid.uuid4()),
-            user = NEXUSUSER,
-            text = text,
-            command = command,
-            image = image,
-            video = video,
-            audio = audio
-        )
-        encoded_message = fastapi.encoders.jsonable_encoder(message)
-        response = await client.post("http://localhost:6040/api/task_response?task_id={}&final={}".format(self.id, final), data = json.dumps(encoded_message))
-
-    #actual logic of the task
-    async def worker(self, **kwargs):
-        raise NotImplemented
-    
     #util function to pass command-like arguments to Task object named attributes
     def cmd_setup(self, parameter: str, options: Dict[str, Any]) -> None:
-        raise NotImplemented
+        raise NotImplementedError
 
-    def start(self, **kwargs) -> None:
-        # TODO get event loop via fastapi/uvicorn maybe if possible
-        self.worker_ = asyncio.get_event_loop().create_task(self.worker())
-    
     #outputs a json representation of the object with values
     def json(self) -> str:
-        return json.dumps(fastapi.encoders.jsonable_encoder(self))
-    
-    #outputs a json representation of the object with attribute variable types (keeps name and desc untouched)
-    def descriptor(self) -> str:
-        descriptor = self.__annotations__
-        descriptor["name"] = self.name
-        descriptor["description"] = self.description
-        return json.dumps(descriptor)
-    
+        return {"name": self.name, "description": self.description}
 
-
+class Inittask(BaseModel):
+    name: str
+    #when core initializes a task for the manager the arguments should be passed as strings, to be eventually decoded later
+    args: Dict[str, str]

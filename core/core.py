@@ -1,27 +1,24 @@
 from dotenv import load_dotenv
 from nexutil.log import setup_logger
-from nexutil.types import Message, Command, Task, Exchange, MessageChannel, Identifiers, NEXUSUSER
-from nexutil.config import Config
+from nexutil import types
+from nexutil import config
 import nexutil.inference as inf
 import nexutil.database as db
 import fastapi 
 from fastapi import encoders
-import uuid
 from colorama import Fore
 import httpx
 import json
-from typing import List, Dict, Any, Optional
-import requests
-import os
+from typing import List
 
 load_dotenv()
 logger = setup_logger("core")
-config = Config()
+config = config.Config()
 
 class Core:
     fastapp: fastapi.FastAPI
     httpx_client: httpx.AsyncClient
-    manager_tasks: List[Task]
+    manager_tasks: List[types.Task]
     dbconnection: db.psycopg.Connection
     
     def __init__(self):
@@ -31,19 +28,6 @@ class Core:
 
 core = Core()
 
-#add relevant info to message from task manager and start a new exchange if necessary
-def handle_manager_message(inbound: Message, exchange: str) -> Message:
-    conv_id = None
-    channel = None
-    for conv in core.conversations:
-        for exc in conv.active_exchanges:
-            if exc.id == exchange:
-                conv_id = conv.id
-                channel = exc.channel
-    inbound.chat = conv_id
-    inbound.channel = channel
-    return inbound
-
 #FastAPI 
 
 @core.fastapp.on_event("startup")
@@ -51,7 +35,7 @@ async def startup_routine():
     try:
         response = await core.httpx_client.get("http://localhost:" + str(config.taskmanager_port) + "/tasks")
         tasks = json.loads(response.text)
-        core.manager_tasks = tasks["aviable tasks"]
+        core.manager_tasks = tasks["aviable_tasks"]
     except httpx.ConnectError:
         logger.error("Error fetching tasks from manager")
     logger.info("Core service loading complete")
@@ -67,7 +51,7 @@ async def root():
 
 #intermediary between comms input and taskmanager
 @core.fastapp.post("/api/message_from_user")
-async def message_from_user(inbound: Message):
+async def message_from_user(inbound: types.Message):
     logger.info("incoming message from user: " + Fore.WHITE + inbound.from_user.username)   
 
     if inbound.text != None:
@@ -80,41 +64,22 @@ async def message_from_user(inbound: Message):
     
     #handle text messages
     if inbound.command == None and inbound.text != None:
-        logger.info("Generating text response...")
-        gen_text = json.loads(await inf.generate_text(core.httpx_client, inbound.text))
-        reply = Message(
-            id = str(uuid.uuid4()),
-            exchange = inbound.exchange,
-            conversation_id = inbound.conversation_id,
-            from_user = NEXUSUSER,
-            datetime = inbound.datetime.now(),
-            channel = inbound.channel,
-            command = None,
-            text = gen_text["str"],
-            image = None,
-            video = None,
-            audio = None
+        logger.info("calling chat task...")
+        task = types.Inittask(
+            name = "chat",
+            args = {"message": inbound.json()}
         )
-        logger.info(Fore.GREEN + "[NEXUS]: " + Fore.WHITE + gen_text["str"])
-        db.add_message(core.dbconnection, reply)
-        await core.httpx_client.post("http://localhost:" + str(config.comms_port) + "/api/message_to_user/{}".format(inbound.from_user.internal), data = reply.json())
-        db.end_exchange(core.dbconnection, inbound.exchange.id)
+        response = await core.httpx_client.post("http://localhost:" + str(config.taskmanager_port) + "/api/run_task", data = task.model_dump_json(), timeout = None)
 
     return {"message": "ok"}
 
-@core.fastapp.post("/api/message_from_group")
-async def message_from_user(inbound: Message, chat_id: str):
-    return {"message": "ok"}
+@core.fastapp.post("/api/task_response/{recipient}")
+async def message_to_user(inbound: types.Message, recipient: str):
+    logger.info(Fore.GREEN + "[NEXUS]: " + Fore.WHITE + inbound.text)
+    db.add_message(core.dbconnection, inbound)
 
-@core.fastapp.post("/api/task_response")
-async def message_to_user(inbound: Message, task_id: str, final: bool):
-    message: Message = handle_manager_message(inbound, task_id)
-    handle_conv(message, final)
-    response = await core.httpx_client.get("http://localhost:" + str(config.taskmanager_port) + "/api/task_complete?task_id={}".format(task_id))
-    #check message type
-    if message.text != None:
-        logger.info(Fore.GREEN + "[{}]: ".format(inbound.user.name) + Fore.WHITE + message.text)
-        #pass payload to comms service
-        encoded_message = encoders.jsonable_encoder(message)
-        response = await core.httpx_client.post("http://localhost:" + str(config.comms_port) + "/api/message_to_user", data = json.dumps(encoded_message))
+    await core.httpx_client.post("http://localhost:" + str(config.comms_port) + "/api/message_to_user/{}".format(recipient), data = inbound.json())
+    #end exchange needs to be executed later
+    db.end_exchange(core.dbconnection, inbound.exchange.id)
+
     return {"message": "ok"}

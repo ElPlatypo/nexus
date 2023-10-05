@@ -47,7 +47,7 @@ async def root():
     return {"message": "Inference service up and running"}
 
 @inference.fastapp.post("/api/generate_text")
-async def generate_text(prompt: String):
+async def generate_text(prompt: String) -> String:
     print(prompt.str)
     output = inference.llama("Q: {} A: ".format(prompt.str), max_tokens=256, stop=["Q:", "\n"], echo=True)
     response = String(str = output["choices"][0]["text"].split("A: ")[1])

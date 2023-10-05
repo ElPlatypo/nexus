@@ -2,13 +2,13 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from typing import Dict, List
 from nexutil.log import setup_logger
-from nexutil.types import Message, Command, MessageChannel, Identifiers, Exchange, Audio
+from nexutil import types
 from nexutil.config import Config
 import nexutil.inference as inf
 import nexutil.database as db
 from colorama import Fore
 import uuid
-import io
+import asyncio
 import httpx
 import os
 import re
@@ -24,10 +24,11 @@ class Comms():
     teleapp: pyrogram.Client
     httpx_client: httpx.AsyncClient
     dbconnection = db.psycopg.Connection
-    sources_id: List[Identifiers] = []
-    users_id: List[Identifiers] = []
-    id_table: Dict[str, List[Identifiers]] = {"users": [], "sources": []}
+    sources_id: List[types.Identifiers] = []
+    users_id: List[types.Identifiers] = []
+    id_table: Dict[str, List[types.Identifiers]] = {"users": [], "sources": []}
     tele_clients: List[str] = []
+    _tele_action_loop: asyncio.Task
 
     def __init__(self) -> None:
         self.fastapp = FastAPI()
@@ -40,7 +41,7 @@ class Comms():
         self.httpx_client = httpx.AsyncClient()
         self.dbconnection = db.connect()
 
-def parse_command(input: str) -> Command:
+def parse_command(input: str) -> types.Command:
     match1 = re.match("^/(\S+)\s?(\w\S+)?", input)
     command = match1.group(1)
     parameter = match1.group(2)
@@ -50,11 +51,17 @@ def parse_command(input: str) -> Command:
         options[match[0]] = match[1]
     if options == {}:
         options = None
-    cmd = Command(name = command, parameter = parameter, options = options)
+    cmd = types.Command(name = command, parameter = parameter, options = options)
     print(cmd)
     return cmd
 
 comms = Comms()
+
+async def loop_tele_action(action: str, chat: str):
+    while True:
+        if action == "typing":
+            await comms.teleapp.send_chat_action(chat, pyrogram.enums.ChatAction.TYPING)
+        await asyncio.sleep(3)
 
 #FastAPI 
 
@@ -74,13 +81,29 @@ async def shutdown_routine():
 async def root():
     return {"message": "Nexus is up and running"}
 
+#endpoint to repond with a message to a user
 @comms.fastapp.post("/api/message_to_user/{recipient}")
-async def message_to_user(message: Message, recipient: str):
+async def message_to_user(message: types.Message, recipient: str):
     logger.debug("incoming message for chat: {}".format(message.conversation_id))
     exchange = db.get_exchange(comms.dbconnection, recipient)
-    if exchange.channel == MessageChannel.TELEGRAM:
+    if exchange.channel == types.MessageChannel.TELEGRAM:
         chat_id = db.get_user_internal(comms.dbconnection, recipient)
         await comms.teleapp.send_message(chat_id.telegram, message.text)
+    return {"message": "ok"}
+
+#send telegram chat actions to users
+@comms.fastapp.get("/api/action_to_user/{action}/{recipient}")
+async def action_to_user(action: str, recipient: str):
+    logger.debug("sending action {} for user: {}".format(action, recipient))
+    exchange = db.get_exchange(comms.dbconnection, recipient)
+    if exchange.channel == types.MessageChannel.TELEGRAM:
+        chat_id = db.get_user_internal(comms.dbconnection, recipient) 
+        if action == "cancel" and comms._tele_action_loop != None:
+            await comms.teleapp.send_chat_action(chat_id.telegram, pyrogram.enums.ChatAction.CANCEL)
+            comms._tele_action_loop.cancel()
+            comms._tele_action_loop = None
+        else:
+            comms._tele_action_loop = asyncio.create_task(loop_tele_action(action, chat_id.telegram))
     return {"message": "ok"}
 
 #pyrogram
@@ -93,7 +116,7 @@ async def tele_message(client, message:pyrogram.types.Message):
     #get internal user id, user and create new entry if necessary
     user = db.get_user_tg(comms.dbconnection, message.chat.id)
     if user == None:
-        user = Identifiers(
+        user = types.Identifiers(
             internal = str(uuid.uuid4()),
             telegram = message.from_user.id,
             discord = None,
@@ -105,20 +128,20 @@ async def tele_message(client, message:pyrogram.types.Message):
     #get exchange id
     exchange = db.get_exchange(comms.dbconnection, user.internal)
     if exchange == None:
-        exchange = Exchange(
+        exchange = types.Exchange(
             id = str(uuid.uuid4()),
-            channel = MessageChannel.TELEGRAM,
+            channel = types.MessageChannel.TELEGRAM,
             concluded = False
         )
         db.add_exchange(comms.dbconnection, exchange)
 
-    inbound = Message(
+    inbound = types.Message(
         id = str(uuid.uuid4()),
         exchange = exchange,
         conversation_id = str(message.chat.id),
         from_user = user,
         datetime = message.date,
-        channel = MessageChannel.TELEGRAM,
+        channel = types.MessageChannel.TELEGRAM,
         command = None,
         text = None,
         image = None,

@@ -4,6 +4,7 @@ import libtmux
 server = libtmux.Server()
 
 os.system("sudo service postgresql start")
+os.system("sudo service redis-server start")
 
 #set session name
 session = server.new_session(session_name= "Nexus")
@@ -21,4 +22,4 @@ comms.attached_pane.send_keys("python3 communications/__main__.py")
 taskmng.attached_pane.send_keys("python3 taskmanager/__main__.py")
 core.attached_pane.send_keys("python3 core/__main__.py")
 inference.attached_pane.send_keys("python3 inference/__main__.py")
-celery.attached_pane.send_keys("celery -A taskmanager.celery.celery worker -l INFO")
+celery.attached_pane.send_keys("celery -A taskmanager.initcelery.celery worker -l INFO")
