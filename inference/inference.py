@@ -6,7 +6,7 @@ import uuid
 from dotenv import load_dotenv
 from nexutil.log import setup_logger
 from nexutil.config import Config
-from nexutil.types import String
+from nexutil import types
 import nexutil.database as db
 from llama_cpp import Llama
 from whisper_jax import FlaxWhisperPipline
@@ -27,10 +27,20 @@ class Inference():
         self.dbconnection = db.connect()
         self.fastapp = fastapi.FastAPI()
         self.httpx_client = httpx.AsyncClient()
-        self.llama = Llama(model_path = os.path.dirname(__file__) + "/models/llama-2-7b-chat.Q4_K_M.gguf")
+        self.llama = Llama(model_path = os.path.dirname(__file__) + "/models/llama2_7b_chat_uncensored.Q4_K_M.gguf")
         self.whisper = FlaxWhisperPipline("openai/whisper-base")
 
 inference = Inference()
+
+def gen_prompt(messages: list[types.Message], usr_str: str, ai_str: str) -> str:
+    prompt = ""
+    for mes in reversed(messages):
+        if mes["user"] == "00000000-0000-0000-0000-000000000000":
+            prompt = prompt + ai_str + mes["message"]
+        else:
+            prompt = prompt + usr_str + mes["message"]
+        prompt = prompt + "\n"
+    return prompt
 
 @inference.fastapp.on_event("startup")
 async def startup_routine():
@@ -46,15 +56,22 @@ async def shutdown_routine():
 async def root():
     return {"message": "Inference service up and running"}
 
-@inference.fastapp.post("/api/generate_text")
-async def generate_text(prompt: String) -> String:
-    print(prompt.str)
-    output = inference.llama("Q: {} A: ".format(prompt.str), max_tokens=256, stop=["Q:", "\n"], echo=True)
-    response = String(str = output["choices"][0]["text"].split("A: ")[1])
+@inference.fastapp.post("/api/chat")
+async def chat(message: types.Message) -> types.String:
+    logger.debug("Requested chat")
+    history = db.get_messages(inference.dbconnection, message.conversation_id, 5)
+    msglist = []
+    msglist.append({"user": str(message.from_user.internal), "message": message.text})
+    for mes in history:
+        msglist.append({"user": mes.from_user.internal, "message": mes.text})
+    prompt = gen_prompt(msglist, usr_str = "### HUMAN:\n", ai_str ="### RESPONSE:\n")
+    print(prompt)
+    output = inference.llama(prompt, max_tokens=256, stop=["### HUMAN:"], echo=True)
+    response = types.String(str = output["choices"][0]["text"].split("### RESPONSE:\n")[-1])
     return response
 
 @inference.fastapp.post("/api/transcribe_audio")
-async def transcribe_audio(files: fastapi.UploadFile):
-    output = inference.whisper(await files.read())
+async def transcribe_audio(audio_file: fastapi.UploadFile):
+    output = inference.whisper(await audio_file.read(), language = "en")
     print(output["text"])
     return output["text"]

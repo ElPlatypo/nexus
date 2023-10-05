@@ -1,12 +1,10 @@
 from dotenv import load_dotenv
 from fastapi import FastAPI
-from typing import Dict, List
 from nexutil.log import setup_logger
 from nexutil import types
 from nexutil.config import Config
 import nexutil.inference as inf
 import nexutil.database as db
-from colorama import Fore
 import uuid
 import asyncio
 import httpx
@@ -24,10 +22,6 @@ class Comms():
     teleapp: pyrogram.Client
     httpx_client: httpx.AsyncClient
     dbconnection = db.psycopg.Connection
-    sources_id: List[types.Identifiers] = []
-    users_id: List[types.Identifiers] = []
-    id_table: Dict[str, List[types.Identifiers]] = {"users": [], "sources": []}
-    tele_clients: List[str] = []
     _tele_action_loop: asyncio.Task
 
     def __init__(self) -> None:
@@ -41,6 +35,10 @@ class Comms():
         self.httpx_client = httpx.AsyncClient()
         self.dbconnection = db.connect()
 
+comms = Comms()
+
+
+#utility functions
 def parse_command(input: str) -> types.Command:
     match1 = re.match("^/(\S+)\s?(\w\S+)?", input)
     command = match1.group(1)
@@ -55,16 +53,17 @@ def parse_command(input: str) -> types.Command:
     print(cmd)
     return cmd
 
-comms = Comms()
-
+#async loop to ping actions that take more than 5 seconds
 async def loop_tele_action(action: str, chat: str):
     while True:
         if action == "typing":
             await comms.teleapp.send_chat_action(chat, pyrogram.enums.ChatAction.TYPING)
+        elif action == "upload_audio":
+            await comms.teleapp.send_chat_action(chat, pyrogram.enums.ChatAction.UPLOAD_AUDIO)
         await asyncio.sleep(3)
 
-#FastAPI 
 
+#FastAPI 
 @comms.fastapp.on_event("startup")
 async def startup_routine():
     await comms.teleapp.start()
@@ -75,6 +74,7 @@ async def startup_routine():
 async def shutdown_routine():
     await comms.teleapp.stop()
     await comms.httpx_client.aclose()
+    comms.dbconnection.close()
     logger.info("comms service shutdown complete")
 
 @comms.fastapp.get("/status")
@@ -106,12 +106,10 @@ async def action_to_user(action: str, recipient: str):
             comms._tele_action_loop = asyncio.create_task(loop_tele_action(action, chat_id.telegram))
     return {"message": "ok"}
 
-#pyrogram
 
+#pyrogram
 @comms.teleapp.on_message()
 async def tele_message(client, message:pyrogram.types.Message):
-
-    
     logger.info("incoming message from telegram user: {}, id: {}".format(message.from_user.username, message.chat.id))
     #get internal user id, user and create new entry if necessary
     user = db.get_user_tg(comms.dbconnection, message.chat.id)
@@ -149,7 +147,6 @@ async def tele_message(client, message:pyrogram.types.Message):
         audio = None
     )
 
-    
     #handle text and command messages    
     if message.text != None and message.text.startswith("/"):
         inbound.command = parse_command(message.text)
@@ -159,8 +156,11 @@ async def tele_message(client, message:pyrogram.types.Message):
 
     #handle voice messages
     if message.voice != None:
+        comms._tele_action_loop = asyncio.create_task(loop_tele_action("upload_audio", user.telegram))
         voice = await message.download(in_memory=True)
         tscript = await inf.transcribe_audio(comms.httpx_client, voice)
+        comms._tele_action_loop.cancel()
+        comms._tele_action_loop = None
         inbound.text = tscript
         
 

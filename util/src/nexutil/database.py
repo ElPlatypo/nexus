@@ -210,3 +210,44 @@ def end_exchange(con: psycopg.Connection, exchange: str) -> bool:
         logger.warning("Error ending exchange in db")
         traceback.print_exc()
         return False
+
+#gets a number of messages ordered by date
+def get_messages(con: psycopg.Connection, conv_id: str, number: int) -> Optional[list[types.Message]]:
+    try:
+        cur = con.cursor()
+
+        cur.execute("""SELECT * FROM messages 
+                    INNER JOIN exchanges ON messages.exchange_id = exchanges.id
+                    WHERE conversation_id = %s
+                    ORDER BY datetime desc
+                    LIMIT %s;""",
+                    (conv_id, number,))
+        
+        results: list[types.Message] = cur.fetchall()
+
+        out = []
+        for mes in results:
+            newmess = types.Message(
+                id = str(mes[0]),
+                exchange = types.Exchange(
+                    id = str(mes[1]),
+                    channel = mes[12],
+                    concluded = mes[11]
+                ),
+                conversation_id = mes[2],
+                from_user = get_user_internal(con, str(mes[3])),
+                datetime = mes[4],
+                channel = mes[12],
+                text = mes[5],
+                command = mes[6],
+                image = mes[7],
+                video = mes[8],
+                audio = mes[9]
+            )
+            out.append(newmess)
+        return out
+        
+    except:
+        logger.warning("Error ending exchange in db")
+        traceback.print_exc()
+        return False

@@ -22,11 +22,12 @@ class Chat(types.Task):
         conf = config.Config()
         #execute task
         try:
-            requests.get("http://localhost:" + str(conf.comms_port) + "/api/action_to_user/typing/{}".format(message["from_user"]["internal"])) 
-            response = requests.post("http://localhost:" + str(conf.inference_port) + "/api/generate_text", data = types.String(str=message["text"]).model_dump_json(), timeout = None) 
+            logger.debug("started text generation task, prompt: " + message["text"])
+            requests.get("http://localhost:" + str(conf.comms_port) + "/api/action_to_user/typing/{}".format(message["from_user"]["internal"]))
+            response = requests.post("http://localhost:" + str(conf.inference_port) + "/api/chat", data = json.dumps(message), timeout = None) 
             requests.get("http://localhost:" + str(conf.comms_port) + "/api/action_to_user/cancel/{}".format(message["from_user"]["internal"]))
             gen_text = response.json()["str"]
-            reply = types.Message(
+            reply = types.Message( 
                 id = str(uuid.uuid4()),
                 exchange = message["exchange"],
                 conversation_id = message["conversation_id"],
