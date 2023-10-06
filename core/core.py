@@ -43,6 +43,7 @@ async def startup_routine():
 @core.fastapp.on_event("shutdown")
 async def shutdown_routine():
     await core.httpx_client.aclose()
+    core.dbconnection.close()
     logger.info("Core shutdown completed")
 
 @core.fastapp.get("/status")
@@ -53,7 +54,7 @@ async def root():
 @core.fastapp.post("/api/message_from_user")
 async def message_from_user(inbound: types.Message):
     logger.info("incoming message from user: " + Fore.WHITE + inbound.from_user.username)   
-
+    logger.debug("message: {}".format(inbound.json()))
     if inbound.text != None:
         logger.info(Fore.GREEN + "[{}]: ".format(inbound.from_user.username) + Fore.WHITE + inbound.text)
 

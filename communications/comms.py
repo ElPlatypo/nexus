@@ -81,10 +81,11 @@ async def shutdown_routine():
 async def root():
     return {"message": "Nexus is up and running"}
 
-#endpoint to repond with a message to a user
+#endpoint to respond with a message to a user
 @comms.fastapp.post("/api/message_to_user/{recipient}")
 async def message_to_user(message: types.Message, recipient: str):
-    logger.debug("incoming message for chat: {}".format(message.conversation_id))
+    logger.info("incoming message for chat: {}".format(message.conversation_id))
+    logger.debug("message: {}".format(message.json()))
     exchange = db.get_exchange(comms.dbconnection, recipient)
     if exchange.channel == types.MessageChannel.TELEGRAM:
         chat_id = db.get_user_internal(comms.dbconnection, recipient)
@@ -94,7 +95,7 @@ async def message_to_user(message: types.Message, recipient: str):
 #send telegram chat actions to users
 @comms.fastapp.get("/api/action_to_user/{action}/{recipient}")
 async def action_to_user(action: str, recipient: str):
-    logger.debug("sending action {} for user: {}".format(action, recipient))
+    logger.info("sending action {} for user: {}".format(action, recipient))
     exchange = db.get_exchange(comms.dbconnection, recipient)
     if exchange.channel == types.MessageChannel.TELEGRAM:
         chat_id = db.get_user_internal(comms.dbconnection, recipient) 
@@ -103,6 +104,7 @@ async def action_to_user(action: str, recipient: str):
             comms._tele_action_loop.cancel()
             comms._tele_action_loop = None
         else:
+            logger.debug("started {} action loop".format(action))
             comms._tele_action_loop = asyncio.create_task(loop_tele_action(action, chat_id.telegram))
     return {"message": "ok"}
 
@@ -150,9 +152,11 @@ async def tele_message(client, message:pyrogram.types.Message):
     #handle text and command messages    
     if message.text != None and message.text.startswith("/"):
         inbound.command = parse_command(message.text)
-        inbound.text = message.text  
+        inbound.text = message.text
+        logger.debug("message: " + message.text)  
     elif message.text != None:
         inbound.text = message.text
+        logger.debug("text: " + message.text) 
 
     #handle voice messages
     if message.voice != None:
@@ -162,7 +166,7 @@ async def tele_message(client, message:pyrogram.types.Message):
         comms._tele_action_loop.cancel()
         comms._tele_action_loop = None
         inbound.text = tscript
-        
+        logging.debug("transcribed audio: " + tscript)
 
     db.add_message(comms.dbconnection, inbound)
 
