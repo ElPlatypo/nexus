@@ -1,0 +1,19 @@
+#general
+python-dotenv
+tomli
+colorama
+httpx
+fastapi
+uvicorn
+
+#inference
+jax[cpu]
+llama-cpp-python
+sentence-transformers
+git+https://github.com/sanchit-gandhi/whisper-jax.git
+
+#others
+psycopg[binary, pool]
+celery
+pyrogram
+
