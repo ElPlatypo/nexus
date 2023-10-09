@@ -10,6 +10,7 @@ from nexutil import types
 import nexutil.database as db
 from llama_cpp import Llama
 from whisper_jax import FlaxWhisperPipline
+from sentence_transformers import SentenceTransformer
 
 load_dotenv() 
 os.environ['TRANSFORMERS_CACHE'] = os.path.dirname(__file__) + "/models"
@@ -22,13 +23,15 @@ class Inference():
     httpx_client: httpx.AsyncClient
     llama: Llama
     whisper: FlaxWhisperPipline
+    stransformer: SentenceTransformer
 
     def __init__(self) -> None:
         self.dbconnection = db.connect()
         self.fastapp = fastapi.FastAPI()
         self.httpx_client = httpx.AsyncClient()
-        self.llama = Llama(model_path = os.path.dirname(__file__) + "/models/llama2_7b_chat_uncensored.Q4_K_M.gguf")
-        self.whisper = FlaxWhisperPipline("openai/whisper-base")
+        #self.llama = Llama(model_path = os.path.dirname(__file__) + "/models/llama2_7b_chat_uncensored.Q4_K_M.gguf")
+        #self.whisper = FlaxWhisperPipline("openai/whisper-base")
+        self.stransformer = SentenceTransformer('all-mpnet-base-v2')
 
 inference = Inference()
 
@@ -55,6 +58,12 @@ async def shutdown_routine():
 @inference.fastapp.get("/status")
 async def root():
     return {"message": "Inference service up and running"}
+
+@inference.astapp.post("/api/gen_embeddings")
+async def gen_embeddings(text: types.String) -> str:
+    logger.info("requested embedding generation")
+    embeddings = inference.stransformer.encode(text.str)
+    return(embeddings.json())
 
 @inference.fastapp.post("/api/chat")
 async def chat(message: types.Message) -> types.String:
