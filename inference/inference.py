@@ -2,6 +2,7 @@ import fastapi
 import httpx
 import os
 import datetime
+import json
 import uuid
 from dotenv import load_dotenv
 from nexutil.log import setup_logger
@@ -31,7 +32,7 @@ class Inference():
         self.httpx_client = httpx.AsyncClient()
         #self.llama = Llama(model_path = os.path.dirname(__file__) + "/models/llama2_7b_chat_uncensored.Q4_K_M.gguf")
         #self.whisper = FlaxWhisperPipline("openai/whisper-base")
-        self.stransformer = SentenceTransformer('all-mpnet-base-v2')
+        self.stransformer = SentenceTransformer('all-mpnet-base-v2', device="cpu")
 
 inference = Inference()
 
@@ -59,11 +60,11 @@ async def shutdown_routine():
 async def root():
     return {"message": "Inference service up and running"}
 
-@inference.astapp.post("/api/gen_embeddings")
+@inference.fastapp.post("/api/gen_embeddings")
 async def gen_embeddings(text: types.String) -> str:
     logger.info("requested embedding generation")
     embeddings = inference.stransformer.encode(text.str)
-    return(embeddings.json())
+    return(json.dumps({"embeddings": embeddings.tolist()}))
 
 @inference.fastapp.post("/api/chat")
 async def chat(message: types.Message) -> types.String:
