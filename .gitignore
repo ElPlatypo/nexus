@@ -6,4 +6,5 @@
 *.db-journal
 *.session
 *.session-journal
+/.vscode
 /inference/models/*
