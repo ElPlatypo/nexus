@@ -85,8 +85,7 @@ class Task():
     def worker(**kwargs):
         raise NotImplementedError
 
-    #util function to pass command-like arguments to Task object named attributes
-    def cmd_setup(self, parameter: str, options: Dict[str, Any]) -> None:
+    def parse_arguments(message: Message) -> dict
         raise NotImplementedError
 
     #outputs a json representation of the object with values
@@ -95,5 +94,6 @@ class Task():
 
 class Inittask(BaseModel):
     name: str
+    message: Message
     #when core initializes a task for the manager the arguments should be passed as strings, to be eventually decoded later
     args: Dict[str, str]

@@ -293,3 +293,21 @@ def add_task(con: psycopg.Connection, task: types.Task, embeds: numpy.array) -> 
         logger.warning("Error registering task in db")
         traceback.print_exc()
         return False
+
+def search_task(con: psycopg.Connection, emb: list[float]) -> Optional[str]:
+    try:
+        cur = con.cursor()
+
+        cur.execute("""SELECT name FROM tasks
+                    ORDER BY embeddings <-> %s
+                    LIMIT 1;""")
+        
+        task = cur.fetchone()
+        if task == None:
+            return None
+        else:
+            return task[0]
+    except:
+        logger.warning("Error searching task in db")
+        traceback.print_exc()
+        return False

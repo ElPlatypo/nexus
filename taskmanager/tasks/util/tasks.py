@@ -14,6 +14,9 @@ class Chat(types.Task):
     description: str = "have a casual conversation with an LLM"
     examples: str = "tell me a joke, how are you doing"
     worker_args: Dict[str, str] = {"message": ""}
+
+    def parse_arguments(message: types.Message) -> dict:
+        return {"message": message.json()}
     
     @shared_task(name = "chat")
     def worker(**kwargs) -> bool:

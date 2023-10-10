@@ -93,8 +93,9 @@ async def run_task(initializer: types.Inittask):
     logging.info("requested task: {}, starting...".format(initializer.name))
     task = manager.get_task(initializer.name)
     if task != None:
+        if initializer.args == {}:
+            initializer.args = task.parse_arguments(initializer.message.text)
         #the ** converts the args dictionary into keyword-value pairs to feed the worker
-        print(task)
         task.worker.delay(**initializer.args)
         return {"message": "ok"}
     else:
