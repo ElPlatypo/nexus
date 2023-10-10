@@ -1,6 +1,9 @@
 import psycopg
 from typing import Optional
 import traceback
+import uuid
+import numpy
+from pgvector.psycopg import register_vector
 from . import types
 from . import log
 from . import config
@@ -11,6 +14,26 @@ conf = config.Config()
 def connect() -> psycopg.Connection:
     con = psycopg.connect(host = conf.database_host, dbname = conf.database_name, user = conf.database_username, password = conf.database_password)
     return con
+
+def gen_task_tables(con: psycopg.Connection) -> bool:
+    try:
+        cur = con.cursor()
+        register_vector(con)
+
+        cur.execute("""DROP TABLE IF EXISTS tasks""")
+        con.commit()
+        cur.execute("""CREATE TABLE IF NOT EXISTS tasks (
+                    id UUID PRIMARY KEY,
+                    name TEXT,
+                    description TEXT,
+                    embeddings vector(768));
+                    """)
+        con.commit()
+        return True
+    except:
+        logger.warning("Error creating task tables in db")
+        traceback.print_exc()
+        return False
 
 def gen_comms_tables(con: psycopg.Connection) -> bool:
     try:
@@ -249,5 +272,24 @@ def get_messages(con: psycopg.Connection, conv_id: str, number: int) -> Optional
         
     except:
         logger.warning("Error ending exchange in db")
+        traceback.print_exc()
+        return False
+
+#register aviable tasks in the database
+def add_task(con: psycopg.Connection, task: types.Task, embeds: numpy.array) -> bool:
+    try:
+        cur = con.cursor()
+
+        cur.execute("""INSERT INTO tasks (
+                    id,
+                    name,
+                    description,
+                    embeddings)
+                    VALUES (%s,%s,%s,%s);""",
+                    (str(uuid.uuid4()), task.name, task.description, embeds,))
+        con.commit()
+        return True
+    except:
+        logger.warning("Error registering task in db")
         traceback.print_exc()
         return False

@@ -12,6 +12,7 @@ import datetime
 class Chat(types.Task):
     name: str = "chat"
     description: str = "have a casual conversation with an LLM"
+    examples: str = "tell me a joke, how are you doing"
     worker_args: Dict[str, str] = {"message": ""}
     
     @shared_task(name = "chat")

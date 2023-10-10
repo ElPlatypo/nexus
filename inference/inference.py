@@ -62,9 +62,10 @@ async def root():
 
 @inference.fastapp.post("/api/gen_embeddings")
 async def gen_embeddings(text: types.String) -> str:
+    print(text)
     logger.info("requested embedding generation")
-    embeddings = inference.stransformer.encode(text.str)
-    return(json.dumps({"embeddings": embeddings.tolist()}))
+    embeddings = inference.stransformer.encode(text.str).tolist()
+    return json.dumps({"embeddings": embeddings})
 
 @inference.fastapp.post("/api/chat")
 async def chat(message: types.Message) -> types.String:

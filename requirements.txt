@@ -14,6 +14,7 @@ git+https://github.com/sanchit-gandhi/whisper-jax.git
 
 #others
 psycopg[binary, pool]
-celery
+pgvector
+celery[redis]
 pyrogram
 

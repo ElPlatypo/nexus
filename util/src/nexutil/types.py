@@ -78,6 +78,7 @@ class Task():
 
     name: str = "parent Task class"
     description: str = "if you see this there's probably something wrong"
+    examples: str = "if you see this there's probably something wrong"
     worker_args: Dict[str, str] = {}
     
     @shared_task
