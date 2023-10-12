@@ -1,6 +1,5 @@
 import requests
 from celery import shared_task
-from typing import Dict
 from nexutil import types
 from nexutil import config
 from nexutil import log
@@ -8,14 +7,14 @@ import json
 import uuid
 import traceback
 import datetime
-    
+
 class Chat(types.Task):
     name: str = "chat"
     description: str = "have a casual conversation with an LLM"
     examples: str = "tell me a joke, how are you doing"
-    worker_args: Dict[str, str] = {"message": ""}
+    worker_args: dict[str, str] = {"message": ""}
 
-    def parse_arguments(message: types.Message) -> dict:
+    def parse_arguments(self, message: types.Message) -> dict:
         return {"message": message.json()}
     
     @shared_task(name = "chat")
@@ -50,5 +49,3 @@ class Chat(types.Task):
             logger.warning("Error generating text with inference service")
             traceback.print_exc()
             return False
-
-        

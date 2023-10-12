@@ -166,7 +166,7 @@ async def tele_message(client, message:pyrogram.types.Message):
         comms._tele_action_loop.cancel()
         comms._tele_action_loop = None
         inbound.text = tscript
-        logging.debug("transcribed audio: " + tscript)
+        logger.debug("transcribed audio: " + tscript)
 
     db.add_message(comms.dbconnection, inbound)
 

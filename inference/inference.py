@@ -30,8 +30,8 @@ class Inference():
         self.dbconnection = db.connect()
         self.fastapp = fastapi.FastAPI()
         self.httpx_client = httpx.AsyncClient()
-        #self.llama = Llama(model_path = os.path.dirname(__file__) + "/models/llama2_7b_chat_uncensored.Q4_K_M.gguf")
-        #self.whisper = FlaxWhisperPipline("openai/whisper-base")
+        self.llama = Llama(model_path = os.path.dirname(__file__) + "/models/llama2_7b_chat_uncensored.Q4_K_M.gguf")
+        self.whisper = FlaxWhisperPipline("openai/whisper-base")
         self.stransformer = SentenceTransformer('all-mpnet-base-v2', device="cpu")
 
 inference = Inference()
@@ -76,7 +76,6 @@ async def chat(message: types.Message) -> types.String:
     for mes in history:
         msglist.append({"user": mes.from_user.internal, "message": mes.text})
     prompt = gen_prompt(msglist, usr_str = "### HUMAN:\n", ai_str ="### RESPONSE:\n")
-    print(prompt)
     output = inference.llama(prompt, max_tokens=256, stop=["### HUMAN:"], echo=True)
     response = types.String(str = output["choices"][0]["text"].split("### RESPONSE:\n")[-1])
     return response

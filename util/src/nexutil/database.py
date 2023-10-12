@@ -276,7 +276,7 @@ def get_messages(con: psycopg.Connection, conv_id: str, number: int) -> Optional
         return False
 
 #register aviable tasks in the database
-def add_task(con: psycopg.Connection, task: types.Task, embeds: numpy.array) -> bool:
+def add_task(con: psycopg.Connection, task: types.Task, embeds: numpy.ndarray) -> bool:
     try:
         cur = con.cursor()
 
@@ -291,16 +291,17 @@ def add_task(con: psycopg.Connection, task: types.Task, embeds: numpy.array) -> 
         return True
     except:
         logger.warning("Error registering task in db")
-        traceback.print_exc()
+        #traceback.print_exc()
         return False
 
 def search_task(con: psycopg.Connection, emb: list[float]) -> Optional[str]:
     try:
         cur = con.cursor()
-
+        register_vector(con)
         cur.execute("""SELECT name FROM tasks
-                    ORDER BY embeddings <-> %s
-                    LIMIT 1;""")
+                    ORDER BY embeddings <-> %s::vector
+                    LIMIT 1;""",
+                    (emb,))
         
         task = cur.fetchone()
         if task == None:

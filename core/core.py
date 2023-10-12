@@ -67,12 +67,13 @@ async def message_from_user(inbound: types.Message):
     if inbound.command == None and inbound.text != None:
         #query with semantic similarity for correct task
         logger.debug("generating message embeddings")
-        emb = inf.gen_embeddings(core.httpx_client, inbound.text)
+        emb = await inf.gen_embeddings(core.httpx_client, types.String(str = inbound.text))
         match_task = db.search_task(core.dbconnection, emb)
-
+        logger.info("selected task: " + match_task)
         task = types.Inittask(
             name = match_task,
-            message = inbound
+            message = inbound,
+            args = {}
         )
         response = await core.httpx_client.post("http://localhost:" + str(config.taskmanager_port) + "/api/run_task", data = task.model_dump_json(), timeout = None)
 

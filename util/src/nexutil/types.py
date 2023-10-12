@@ -1,11 +1,10 @@
 from enum import Enum
-from typing import Dict, Any, List, Optional, Callable
+from typing import Any, Optional
 from pydantic import BaseModel
 import fastapi.encoders
 import datetime
 import json
 from celery import shared_task
-from pyrogram import enums
 
 #pydantic class definitions
 
@@ -41,7 +40,7 @@ class String(BaseModel):
 class Command(BaseModel):
     name: str
     parameter: Optional[str] = None
-    options: Optional[Dict[str, Any]] = None
+    options: Optional[dict[str, Any]] = None
 
 class Image(BaseModel):
     bytes: Any
@@ -79,13 +78,15 @@ class Task():
     name: str = "parent Task class"
     description: str = "if you see this there's probably something wrong"
     examples: str = "if you see this there's probably something wrong"
-    worker_args: Dict[str, str] = {}
+    worker_args: dict[str, str] = {}
     
+    #contains that actual logic of the task
     @shared_task
     def worker(**kwargs):
         raise NotImplementedError
 
-    def parse_arguments(message: Message) -> dict
+    #used to parse some text to extract relevant arguments
+    def parse_arguments(self, message: Message) -> dict:
         raise NotImplementedError
 
     #outputs a json representation of the object with values
@@ -94,6 +95,6 @@ class Task():
 
 class Inittask(BaseModel):
     name: str
-    message: Message
+    message: Optional[Message]
     #when core initializes a task for the manager the arguments should be passed as strings, to be eventually decoded later
-    args: Dict[str, str]
+    args: Optional[dict[str, str]]
